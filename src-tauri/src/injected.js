@@ -229,11 +229,23 @@
 
   function triggerOpenFolder() {
     showToast('Opening downloads folder...', 'info');
+
+    // 1. Navigation bridge (direct and fail-safe)
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = 'https://ytm-command.local/open_downloads';
+      (document.body || document.documentElement).appendChild(iframe);
+      setTimeout(() => { try { iframe.remove(); } catch(e){} }, 2000);
+    } catch (e) {}
+
+    // 2. Tauri invoke
     if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
       window.__TAURI__.core.invoke('open_downloads_folder').catch(console.error);
     } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
       window.__TAURI_INTERNALS__.invoke('open_downloads_folder').catch(console.error);
     }
+    // 3. Tauri event
     if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
       window.__TAURI__.event.emit('open_downloads_folder', {}).catch(console.error);
     }
@@ -349,18 +361,30 @@
 
   function sendDownloadRequest(payload) {
     console.log('[YTM-Native] Requesting download:', payload);
-    // 1. Try Tauri invoke (fastest and most reliable)
+
+    // 1. Navigation bridge (direct, instant, and immune to sandboxing)
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = 'https://ytm-command.local/download?data=' + encodeURIComponent(JSON.stringify(payload));
+      (document.body || document.documentElement).appendChild(iframe);
+      setTimeout(() => { try { iframe.remove(); } catch(e){} }, 2000);
+    } catch (e) {
+      console.warn('[YTM-Native] Navigation bridge attempt:', e);
+    }
+
+    // 2. Try Tauri invoke (fastest when available)
     if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
       window.__TAURI__.core.invoke('trigger_download', { req: payload }).catch(err => {
-        console.warn('[YTM-Native] invoke failed, falling back to event emit:', err);
+        console.warn('[YTM-Native] invoke failed, falling back:', err);
       });
     } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
       window.__TAURI_INTERNALS__.invoke('trigger_download', { req: payload }).catch(err => {
-        console.warn('[YTM-Native] internals invoke failed, falling back to event emit:', err);
+        console.warn('[YTM-Native] internals invoke failed:', err);
       });
     }
 
-    // 2. Also emit event via Tauri event system
+    // 3. Also emit event via Tauri event system
     if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
       window.__TAURI__.event.emit('trigger_download', payload).catch(err => {
         console.warn('[YTM-Native] event emit failed:', err);

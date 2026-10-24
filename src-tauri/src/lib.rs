@@ -41,12 +41,34 @@ pub fn run() {
                 .map_err(tauri::Error::InvalidUrl)?;
             let init_script = include_str!("injected.js");
 
+            let app_handle_for_nav = app.handle().clone();
             let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(target_url))
                 .title("YouTube Music")
                 .inner_size(1360.0, 860.0)
                 .min_inner_size(850.0, 550.0)
                 .theme(Some(tauri::Theme::Dark))
                 .initialization_script(init_script)
+                .on_navigation(move |url| {
+                    let host = url.host_str().unwrap_or_default();
+                    if url.scheme() == "ytm-cmd" || host == "ytm-command.local" || host.ends_with(".ytm-command.local") {
+                        let path = url.path().trim_start_matches('/');
+                        if path == "download" {
+                            if let Some(query) = url.query() {
+                                for (k, v) in url::form_urlencoded::parse(query.as_bytes()) {
+                                    if k == "data" {
+                                        if let Ok(req) = serde_json::from_str::<DownloadRequest>(&v) {
+                                            downloader::start_download(app_handle_for_nav.clone(), req);
+                                        }
+                                    }
+                                }
+                            }
+                        } else if path == "open_downloads" {
+                            downloader::open_downloads_folder();
+                        }
+                        return false;
+                    }
+                    true
+                })
                 .build()?;
 
             // 3. Build Tray Context Menu

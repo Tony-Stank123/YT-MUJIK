@@ -1,12 +1,49 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::os::windows::process::CommandExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
-const FFMPEG_PATH: &str = r"C:\Users\satis\AppData\Local\Programs\Python\Python312\Scripts\ffmpeg.exe";
+
+pub fn get_ffmpeg_path() -> Option<PathBuf> {
+    let local_paths = [
+        PathBuf::from(r"C:\E shift\yt music\bin\ffmpeg.exe"),
+        PathBuf::from("bin/ffmpeg.exe"),
+        PathBuf::from("ffmpeg.exe"),
+    ];
+    for p in &local_paths {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let p1 = exe_dir.join("bin").join("ffmpeg.exe");
+            if p1.exists() {
+                return Some(p1);
+            }
+            let p2 = exe_dir.join("ffmpeg.exe");
+            if p2.exists() {
+                return Some(p2);
+            }
+        }
+    }
+
+    let sfd = PathBuf::from(r"C:\Program Files\Softdeluxe\Free Download Manager\ffmpeg.exe");
+    if sfd.exists() {
+        return Some(sfd);
+    }
+
+    let wand = PathBuf::from(r"C:\Users\satis\AppData\Local\Wand\app-12.26.1\resources\app.asar.unpacked\static\unpacked\capture\release\bin\64bit\ffmpeg.exe");
+    if wand.exists() {
+        return Some(wand);
+    }
+
+    None
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -180,22 +217,17 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
             "--remote-components",
             "ejs:github",
             "-f",
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "bestvideo[vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "--merge-output-format",
             "mp4",
             "--embed-metadata",
             "--embed-thumbnail",
-            "--write-subs",
-            "--write-auto-subs",
-            "--sub-langs",
-            "all,-live_chat",
-            "--embed-subs",
             "-o",
             &out_template,
         ]);
 
-        if Path::new(FFMPEG_PATH).exists() {
-            cmd.args(&["--ffmpeg-location", FFMPEG_PATH]);
+        if let Some(ref ffmpeg_path) = get_ffmpeg_path() {
+            cmd.args(&["--ffmpeg-location", ffmpeg_path.to_str().unwrap_or_default()]);
         }
 
         if is_playlist {
@@ -231,7 +263,7 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         "--remote-components",
                         "ejs:github",
                         "-f",
-                        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                        "bestvideo[vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                         "--merge-output-format",
                         "mp4",
                         "--embed-metadata",
@@ -240,8 +272,8 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         &out_template,
                         "--no-playlist",
                     ]);
-                    if Path::new(FFMPEG_PATH).exists() {
-                        retry_cmd.args(&["--ffmpeg-location", FFMPEG_PATH]);
+                    if let Some(ref ffmpeg_path) = get_ffmpeg_path() {
+                        retry_cmd.args(&["--ffmpeg-location", ffmpeg_path.to_str().unwrap_or_default()]);
                     }
                     retry_cmd.arg(&retry_url);
                     retry_cmd.creation_flags(CREATE_NO_WINDOW);
