@@ -32,7 +32,6 @@ pub fn get_downloads_dir() -> PathBuf {
         return standard_path;
     }
 
-    // Try relative to workspace
     let rel_path = PathBuf::from("downloads");
     if rel_path.exists() {
         return rel_path;
@@ -58,14 +57,51 @@ pub fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
+fn safe_js_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\'', "\\'")
+        .replace('\n', " ")
+        .replace('\r', "")
+}
+
+fn notify_frontend(app: &AppHandle, message: &str, status: &str, title: &str) {
+    let _ = app.emit(
+        "download_status",
+        DownloadStatus {
+            status: status.into(),
+            message: message.into(),
+            title: title.into(),
+        },
+    );
+
+    if let Some(w) = app.get_webview_window("main") {
+        let safe_msg = safe_js_string(message);
+        let safe_type = match status {
+            "started" => "loading",
+            "completed" => "success",
+            "error" => "error",
+            _ => "info",
+        };
+        let js = format!(
+            "if (window.__ytm_show_toast) window.__ytm_show_toast(\"{}\", \"{}\");",
+            safe_msg, safe_type
+        );
+        let _ = w.eval(&js);
+    }
+}
+
 pub fn start_download(app: AppHandle, req: DownloadRequest) {
     tauri::async_runtime::spawn(async move {
         let downloads_dir = get_downloads_dir();
-        let title = req.title.unwrap_or_else(|| "Music Track".into());
-        let artist = req.artist.unwrap_or_default();
+        let mut title = req.title.unwrap_or_else(|| "Music Track".into()).trim().to_string();
+        if title.is_empty() {
+            title = "Music Track".to_string();
+        }
+        let artist = req.artist.unwrap_or_default().trim().to_string();
         let is_playlist = req.download_type == "playlist";
 
-        // Convert music.youtube.com to www.youtube.com for clean yt-dlp extraction
+        // Convert music.youtube.com to www.youtube.com
         let mut clean_url = req.url.trim().to_string();
         if clean_url.contains("music.youtube.com") {
             clean_url = clean_url.replace("music.youtube.com", "www.youtube.com");
@@ -77,41 +113,43 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                 clean_url = clean_url[..idx].to_string();
             }
             if let Some(idx) = clean_url.find("?list=") {
-                // If the URL is only ?list=, do not strip, but for watch URLs strip
                 if clean_url.contains("/watch") {
                     clean_url = clean_url[..idx].to_string();
                 }
             }
+
+            // CRITICAL SAFEGUARD: If URL is root youtube.com, empty, or lacks video id, fallback to search!
+            if clean_url == "https://www.youtube.com"
+                || clean_url == "https://www.youtube.com/"
+                || clean_url.is_empty()
+                || (!clean_url.contains("watch?v=") && !clean_url.contains("youtu.be/") && !clean_url.starts_with("ytsearch1:"))
+            {
+                if !title.is_empty() && title != "Music Track" && title != "Current Song" {
+                    let search_term = if !artist.is_empty() {
+                        format!("{} {}", title, artist)
+                    } else {
+                        title.clone()
+                    };
+                    clean_url = format!("ytsearch1:{}", search_term);
+                    log::info!("Falling back to search query for single song download: {}", clean_url);
+                } else {
+                    log::warn!("Cannot start single song download: no song is currently playing or selected.");
+                    notify_frontend(&app, "⚠️ No song is currently playing. Start a song first!", "error", &title);
+                    return;
+                }
+            }
         }
 
-        log::info!("Starting download [{}] URL: {}", if is_playlist { "PLAYLIST" } else { "SONG" }, clean_url);
+        log::info!("Starting [{}] download: \"{}\" -> {}", if is_playlist { "PLAYLIST" } else { "SONG" }, title, clean_url);
 
-        // Notify UI download started
         let started_msg = if is_playlist {
             format!("Downloading playlist \"{}\" (MP4)...", title)
         } else {
             format!("Downloading \"{}\" (MP4)...", title)
         };
+        notify_frontend(&app, &started_msg, "started", &title);
 
-        let _ = app.emit(
-            "download_status",
-            DownloadStatus {
-                status: "started".into(),
-                message: started_msg.clone(),
-                title: title.clone(),
-            },
-        );
-
-        if let Some(w) = app.get_webview_window("main") {
-            let safe_title = title.replace('"', "\\\"").replace('\'', "\\'");
-            let js = format!(
-                "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Downloading \\\"{}\\\" in MP4...\", \"loading\");",
-                safe_title
-            );
-            let _ = w.eval(&js);
-        }
-
-        // Save lyrics text file if lyrics were extracted from YouTube Music
+        // Save lyrics text file if available
         if let Some(ref lyrics_text) = req.lyrics {
             if !lyrics_text.trim().is_empty() {
                 let lyrics_filename = format!(
@@ -171,63 +209,67 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
 
         match cmd.output() {
             Ok(output) => {
+                let stdout_str = String::from_utf8_lossy(&output.stdout);
+                let stderr_str = String::from_utf8_lossy(&output.stderr);
+
+                // If single song download yielded 0 items, retry with ytsearch1
+                if !is_playlist && stdout_str.contains("Downloading 0 items") && !clean_url.starts_with("ytsearch1:") {
+                    log::warn!("Download yielded 0 items. Retrying with ytsearch1 for single song: {}", title);
+                    let search_term = if !artist.is_empty() {
+                        format!("{} {}", title, artist)
+                    } else {
+                        title.clone()
+                    };
+                    let retry_url = format!("ytsearch1:{}", search_term);
+
+                    let mut retry_cmd = Command::new("python");
+                    retry_cmd.args(&[
+                        "-m",
+                        "yt_dlp",
+                        "--js-runtimes",
+                        "node",
+                        "--remote-components",
+                        "ejs:github",
+                        "-f",
+                        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                        "--merge-output-format",
+                        "mp4",
+                        "--embed-metadata",
+                        "--embed-thumbnail",
+                        "-o",
+                        &out_template,
+                        "--no-playlist",
+                    ]);
+                    if Path::new(FFMPEG_PATH).exists() {
+                        retry_cmd.args(&["--ffmpeg-location", FFMPEG_PATH]);
+                    }
+                    retry_cmd.arg(&retry_url);
+                    retry_cmd.creation_flags(CREATE_NO_WINDOW);
+
+                    if let Ok(retry_output) = retry_cmd.output() {
+                        if retry_output.status.success() {
+                            let success_msg = format!("\"{}\" downloaded successfully!", title);
+                            notify_frontend(&app, &success_msg, "completed", &title);
+                            return;
+                        }
+                    }
+                }
+
                 if output.status.success() {
                     let success_msg = if is_playlist {
                         format!("Playlist \"{}\" downloaded successfully!", title)
                     } else {
                         format!("\"{}\" downloaded successfully!", title)
                     };
-
-                    let _ = app.emit(
-                        "download_status",
-                        DownloadStatus {
-                            status: "completed".into(),
-                            message: success_msg.clone(),
-                            title: title.clone(),
-                        },
-                    );
-
-                    if let Some(w) = app.get_webview_window("main") {
-                        let safe_msg = success_msg.replace('"', "\\\"").replace('\'', "\\'");
-                        let js = format!(
-                            "if (window.__ytm_show_toast) window.__ytm_show_toast(\"{}\", \"success\");",
-                            safe_msg
-                        );
-                        let _ = w.eval(&js);
-                    }
+                    notify_frontend(&app, &success_msg, "completed", &title);
                 } else {
-                    let err_str = String::from_utf8_lossy(&output.stderr);
-                    log::error!("yt-dlp download failed: {}", err_str);
-                    let _ = app.emit(
-                        "download_status",
-                        DownloadStatus {
-                            status: "error".into(),
-                            message: "Download failed. Please check internet connection.".into(),
-                            title: title.clone(),
-                        },
-                    );
-
-                    if let Some(w) = app.get_webview_window("main") {
-                        let js = "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Download failed. Please check internet connection.\", \"error\");";
-                        let _ = w.eval(js);
-                    }
+                    log::error!("yt-dlp download failed: {}", stderr_str);
+                    notify_frontend(&app, "Download failed. Please check internet connection.", "error", &title);
                 }
             }
             Err(e) => {
                 log::error!("Failed to launch yt-dlp process: {}", e);
-                let _ = app.emit(
-                    "download_status",
-                    DownloadStatus {
-                        status: "error".into(),
-                        message: format!("Could not start download: {}", e),
-                        title: title.clone(),
-                    },
-                );
-
-                if let Some(w) = app.get_webview_window("main") {
-                    let js = "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Could not launch downloader.\", \"error\");";
-                    let _ = w.eval(js);
-                }
+                notify_frontend(&app, &format!("Could not launch downloader: {}", e), "error", &title);
             }
         }
     });

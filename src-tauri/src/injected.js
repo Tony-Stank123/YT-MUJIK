@@ -76,14 +76,32 @@
   setInterval(handleAdsAndPrompts, 250);
 
   /* ==========================================================================
-     2. TOAST NOTIFICATION SYSTEM
+     2. BULLETPROOF TOAST NOTIFICATION SYSTEM (INLINE-STYLED & GUARANTEED VISIBLE)
      ========================================================================== */
   function ensureToastContainer() {
     let container = document.getElementById('ytm-toast-container');
     if (!container) {
       container = document.createElement('div');
       container.id = 'ytm-toast-container';
-      document.body.appendChild(container);
+    }
+
+    // Always enforce top-priority inline styles
+    container.style.cssText = [
+      'position: fixed !important',
+      'bottom: 92px !important',
+      'right: 24px !important',
+      'z-index: 2147483647 !important',
+      'display: flex !important',
+      'flex-direction: column !important',
+      'gap: 10px !important',
+      'pointer-events: none !important',
+      'max-width: 440px !important',
+      'width: auto !important'
+    ].join(';');
+
+    const targetParent = document.body || document.documentElement;
+    if (targetParent && !targetParent.contains(container)) {
+      targetParent.appendChild(container);
     }
     return container;
   }
@@ -93,25 +111,68 @@
     const toast = document.createElement('div');
     toast.className = `ytm-toast ytm-toast-${type}`;
 
+    let borderColor = 'rgba(255, 255, 255, 0.2)';
+    let glow = 'rgba(0, 0, 0, 0.7)';
     let iconHtml = '';
+
     if (type === 'loading') {
-      iconHtml = '<div class="ytm-spinner"></div>';
+      borderColor = 'rgba(255, 0, 0, 0.7)';
+      glow = 'rgba(255, 0, 0, 0.35)';
+      iconHtml = '<span style="display:inline-block; font-size:16px;">⏳</span>';
     } else if (type === 'success') {
-      iconHtml = '<span class="ytm-toast-icon" style="color:#22c55e;">✓</span>';
+      borderColor = 'rgba(34, 197, 94, 0.7)';
+      glow = 'rgba(34, 197, 94, 0.35)';
+      iconHtml = '<span style="color:#22c55e; font-size:17px; font-weight:bold;">✓</span>';
     } else if (type === 'error') {
-      iconHtml = '<span class="ytm-toast-icon" style="color:#ef4444;">✕</span>';
+      borderColor = 'rgba(239, 68, 68, 0.7)';
+      glow = 'rgba(239, 68, 68, 0.35)';
+      iconHtml = '<span style="color:#ef4444; font-size:17px; font-weight:bold;">✕</span>';
     } else {
-      iconHtml = '<span class="ytm-toast-icon" style="color:#3b82f6;">ℹ</span>';
+      borderColor = 'rgba(59, 130, 246, 0.7)';
+      glow = 'rgba(59, 130, 246, 0.35)';
+      iconHtml = '<span style="color:#3b82f6; font-size:17px; font-weight:bold;">ℹ</span>';
     }
 
-    toast.innerHTML = `
-      ${iconHtml}
-      <div class="ytm-toast-msg">${message}</div>
-    `;
+    toast.style.cssText = [
+      'pointer-events: auto !important',
+      'display: flex !important',
+      'align-items: center !important',
+      'gap: 12px !important',
+      'padding: 14px 18px !important',
+      'background: rgba(18, 20, 28, 0.96) !important',
+      'border: 1.5px solid ' + borderColor + ' !important',
+      'border-radius: 12px !important',
+      'color: #ffffff !important',
+      'font-size: 13.5px !important',
+      'font-weight: 600 !important',
+      'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important',
+      'box-shadow: 0 10px 30px ' + glow + ', 0 2px 8px rgba(0,0,0,0.6) !important',
+      'opacity: 1 !important',
+      'transition: opacity 0.3s ease, transform 0.3s ease !important',
+      'transform: translateY(0) !important',
+      'z-index: 2147483647 !important'
+    ].join(';');
 
+    const msgEl = document.createElement('div');
+    msgEl.style.cssText = 'flex: 1 1 auto; line-height: 1.4; word-break: break-word;';
+    msgEl.innerHTML = `${iconHtml} <span style="margin-left:6px;">${message}</span>`;
+    toast.appendChild(msgEl);
+
+    // Action button
     if (actionText && actionCallback) {
       const btn = document.createElement('button');
-      btn.className = 'ytm-toast-action';
+      btn.style.cssText = [
+        'background: rgba(255, 255, 255, 0.15) !important',
+        'border: 1px solid rgba(255, 255, 255, 0.2) !important',
+        'color: #ffffff !important',
+        'padding: 5px 12px !important',
+        'border-radius: 6px !important',
+        'font-size: 12px !important',
+        'font-weight: 600 !important',
+        'cursor: pointer !important',
+        'margin-left: 8px !important',
+        'white-space: nowrap !important'
+      ].join(';');
       btn.textContent = actionText;
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -120,13 +181,22 @@
       toast.appendChild(btn);
     } else if (type === 'success') {
       const btn = document.createElement('button');
-      btn.className = 'ytm-toast-action';
+      btn.style.cssText = [
+        'background: rgba(34, 197, 94, 0.25) !important',
+        'border: 1px solid rgba(34, 197, 94, 0.5) !important',
+        'color: #ffffff !important',
+        'padding: 6px 14px !important',
+        'border-radius: 6px !important',
+        'font-size: 12px !important',
+        'font-weight: 600 !important',
+        'cursor: pointer !important',
+        'margin-left: 8px !important',
+        'white-space: nowrap !important'
+      ].join(';');
       btn.textContent = '📂 Open Folder';
       btn.onclick = (e) => {
         e.stopPropagation();
-        if (window.__TAURI__ && window.__TAURI__.event) {
-          window.__TAURI__.event.emit('open_downloads_folder', {});
-        }
+        triggerOpenFolder();
       };
       toast.appendChild(btn);
     }
@@ -135,8 +205,11 @@
 
     const duration = type === 'loading' ? 14000 : 7000;
     setTimeout(() => {
-      toast.classList.add('ytm-toast-fade');
-      setTimeout(() => toast.remove(), 400);
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(12px)';
+      setTimeout(() => {
+        if (toast.parentNode) toast.remove();
+      }, 350);
     }, duration);
 
     return toast;
@@ -146,22 +219,31 @@
     showToast(message, type);
   };
 
-  // Listen for download_status events from Rust
+  function triggerOpenFolder() {
+    showToast('Opening downloads folder...', 'info');
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+      window.__TAURI__.core.invoke('open_downloads_folder').catch(console.error);
+    } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+      window.__TAURI_INTERNALS__.invoke('open_downloads_folder').catch(console.error);
+    }
+    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
+      window.__TAURI__.event.emit('open_downloads_folder', {}).catch(console.error);
+    }
+  }
+
+  // Listen for download_status events from Rust if event system is ready
   if (window.__TAURI__ && window.__TAURI__.event) {
     window.__TAURI__.event.listen('download_status', (event) => {
       const data = event.payload;
-      if (data.status === 'started') {
-        showToast(data.message, 'loading');
-      } else if (data.status === 'completed') {
-        showToast(data.message, 'success');
-      } else if (data.status === 'error') {
-        showToast(data.message, 'error');
+      if (data && data.message) {
+        const type = data.status === 'started' ? 'loading' : (data.status === 'completed' ? 'success' : 'error');
+        showToast(data.message, type);
       }
     });
   }
 
   /* ==========================================================================
-     3. MP4 DOWNLOAD ENGINE (STRICT SEPARATION: SONG VS PLAYLIST)
+     3. MP4 DOWNLOAD ENGINE (MULTI-TIER TRACK & PLAYLIST EXTRACTION)
      ========================================================================== */
   function extractVideoId(url) {
     if (!url) return null;
@@ -178,6 +260,76 @@
     return match ? match[1] : null;
   }
 
+  function getCurrentTrackDetails() {
+    let videoId = null;
+    let title = '';
+    let artist = '';
+    let playlistId = null;
+
+    // Tier 1: HTML5 video player API (The most authoritative source in YouTube Music!)
+    const player = document.querySelector('#movie_player, .html5-video-player');
+    if (player) {
+      if (typeof player.getVideoData === 'function') {
+        try {
+          const vData = player.getVideoData();
+          if (vData) {
+            if (vData.video_id) videoId = vData.video_id;
+            if (vData.title) title = vData.title.trim();
+            if (vData.author) artist = vData.author.trim();
+          }
+        } catch (e) {
+          console.warn('[YTM-Native] Error reading player.getVideoData():', e);
+        }
+      }
+      if (!videoId && typeof player.getVideoUrl === 'function') {
+        try {
+          const vUrl = player.getVideoUrl();
+          if (vUrl) videoId = extractVideoId(vUrl);
+        } catch (e) {}
+      }
+      if (typeof player.getPlaylistId === 'function') {
+        try {
+          playlistId = player.getPlaylistId();
+        } catch (e) {}
+      }
+    }
+
+    // Tier 2: MediaSession API (Continuously updated by YouTube Music on track start)
+    if (navigator.mediaSession && navigator.mediaSession.metadata) {
+      const meta = navigator.mediaSession.metadata;
+      if (!title && meta.title) title = meta.title.trim();
+      if (!artist && meta.artist) artist = meta.artist.trim();
+    }
+
+    // Tier 3: DOM Player Bar Elements
+    const titleEl = document.querySelector('ytmusic-player-bar .title');
+    if (!title && titleEl) {
+      title = titleEl.textContent.trim();
+    }
+    const bylineEl = document.querySelector('ytmusic-player-bar .byline');
+    if (!artist && bylineEl) {
+      artist = bylineEl.textContent.trim();
+    }
+
+    // Tier 4: Location URL or player bar link
+    if (!videoId) {
+      videoId = extractVideoId(window.location.href);
+    }
+    if (!videoId) {
+      const link = document.querySelector('ytmusic-player-bar a[href*="watch"], ytmusic-player-bar a[href*="v="]');
+      if (link && link.href) {
+        videoId = extractVideoId(link.href);
+      }
+    }
+
+    // Playlist ID fallback from location URL
+    if (!playlistId) {
+      playlistId = extractPlaylistId(window.location.href);
+    }
+
+    return { videoId, title, artist, playlistId };
+  }
+
   function extractCurrentLyrics() {
     const lyricsEl = document.querySelector('ytmusic-description-shelf-renderer .description, ytmusic-player-page #tab-renderer [page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]');
     if (lyricsEl && lyricsEl.innerText && lyricsEl.innerText.trim().length > 10) {
@@ -186,58 +338,79 @@
     return null;
   }
 
-  // 1. DOWNLOAD CURRENT SONG ONLY (Strips all &list= and queue params)
-  function downloadCurrentSong(customVideoUrl = null, customTitle = null) {
-    let currentUrl = customVideoUrl || window.location.href;
-    let videoId = extractVideoId(currentUrl);
-
-    if (!videoId) {
-      const link = document.querySelector('ytmusic-player-bar .title a');
-      if (link && link.href) {
-        videoId = extractVideoId(link.href);
-      }
+  function sendDownloadRequest(payload) {
+    console.log('[YTM-Native] Sending download request:', payload);
+    // 1. Try Tauri invoke (fastest and most reliable)
+    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+      window.__TAURI__.core.invoke('trigger_download', { req: payload }).catch(err => {
+        console.warn('[YTM-Native] invoke failed, falling back to event emit:', err);
+      });
+    } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+      window.__TAURI_INTERNALS__.invoke('trigger_download', { req: payload }).catch(err => {
+        console.warn('[YTM-Native] internals invoke failed, falling back to event emit:', err);
+      });
     }
 
-    const titleEl = document.querySelector('ytmusic-player-bar .title');
-    const bylineEl = document.querySelector('ytmusic-player-bar .byline');
-    const title = customTitle || (titleEl ? titleEl.textContent.trim() : '') || (navigator.mediaSession && navigator.mediaSession.metadata ? navigator.mediaSession.metadata.title : 'Current Song');
-    const artist = (bylineEl ? bylineEl.textContent.trim() : '') || (navigator.mediaSession && navigator.mediaSession.metadata ? navigator.mediaSession.metadata.artist : '');
-
-    // Show instant toast notification
-    showToast(`Downloading "${title}" in MP4...`, 'loading');
-
-    // STRICT ISOLATION: Build single watch URL with NO &list= parameter
-    let songUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : currentUrl.split('&list=')[0].split('?list=')[0];
-
-    const lyrics = extractCurrentLyrics();
-
-    console.log('[YTM-Native] Downloading SINGLE SONG ONLY:', title, songUrl);
-
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.emit('trigger_download', {
-        downloadType: 'song',
-        url: songUrl,
-        title: title,
-        artist: artist,
-        lyrics: lyrics
+    // 2. Also emit event via Tauri event system
+    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
+      window.__TAURI__.event.emit('trigger_download', payload).catch(err => {
+        console.warn('[YTM-Native] event emit failed:', err);
       });
     }
   }
 
+  // 1. DOWNLOAD CURRENT SONG ONLY (Strips all &list= and queue params)
+  function downloadCurrentSong(customVideoUrl = null, customTitle = null) {
+    const track = getCurrentTrackDetails();
+    let currentUrl = customVideoUrl || window.location.href;
+    let videoId = customVideoUrl ? extractVideoId(customVideoUrl) : track.videoId;
+    let title = customTitle || track.title || 'Music Track';
+    let artist = track.artist || '';
+
+    // If nothing is playing and no title or videoId found
+    if (!videoId && (!title || title === 'Music Track' || title === 'Current Song')) {
+      showToast('⚠️ No song is currently playing. Start playing a song first!', 'error');
+      return;
+    }
+
+    // Strict single song URL construction
+    let songUrl = '';
+    if (videoId) {
+      songUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    } else if (title && title !== 'Music Track') {
+      songUrl = `ytsearch1:${artist ? title + ' ' + artist : title}`;
+    } else {
+      songUrl = currentUrl.split('&list=')[0].split('?list=')[0];
+    }
+
+    // Show INSTANT toast notification
+    showToast(`Downloading "${title}" in MP4 format...`, 'loading');
+
+    const lyrics = extractCurrentLyrics();
+
+    sendDownloadRequest({
+      downloadType: 'song',
+      url: songUrl,
+      title: title,
+      artist: artist,
+      lyrics: lyrics
+    });
+  }
+
   // 2. DOWNLOAD ENTIRE PLAYLIST
   function downloadCurrentPlaylist() {
-    let currentUrl = window.location.href;
-    let listId = extractPlaylistId(currentUrl);
+    const track = getCurrentTrackDetails();
+    let listId = track.playlistId || extractPlaylistId(window.location.href);
 
     if (!listId) {
-      const link = document.querySelector('ytmusic-player-bar .title a');
+      const link = document.querySelector('ytmusic-player-bar .title a, a[href*="list="]');
       if (link && link.href) {
         listId = extractPlaylistId(link.href);
       }
     }
 
     if (!listId) {
-      showToast('⚠️ No playlist detected. Open a playlist or album first!', 'error');
+      showToast('⚠️ No playlist detected. Open an album or playlist first!', 'error');
       return;
     }
 
@@ -250,23 +423,22 @@
     );
     if (headerTitle) {
       playlistTitle = headerTitle.textContent.trim();
+    } else if (track.title) {
+      playlistTitle = `${track.title} Mix`;
     }
 
-    // Show instant toast notification
-    showToast(`Downloading Playlist "${playlistTitle}" in MP4...`, 'loading');
+    // Show INSTANT toast notification
+    showToast(`Downloading Playlist "${playlistTitle}" in MP4 format...`, 'loading');
 
-    let playlistUrl = `https://www.youtube.com/playlist?list=${listId}`;
-    console.log('[YTM-Native] Downloading PLAYLIST:', playlistTitle, playlistUrl);
+    const playlistUrl = `https://www.youtube.com/playlist?list=${listId}`;
 
-    if (window.__TAURI__ && window.__TAURI__.event) {
-      window.__TAURI__.event.emit('trigger_download', {
-        downloadType: 'playlist',
-        url: playlistUrl,
-        title: playlistTitle,
-        artist: '',
-        lyrics: null
-      });
-    }
+    sendDownloadRequest({
+      downloadType: 'playlist',
+      url: playlistUrl,
+      title: playlistTitle,
+      artist: '',
+      lyrics: null
+    });
   }
 
   window.__ytm_download_current_song = downloadCurrentSong;
@@ -357,9 +529,7 @@
       `;
       folderBtn.onclick = (e) => {
         e.stopPropagation();
-        if (window.__TAURI__ && window.__TAURI__.event) {
-          window.__TAURI__.event.emit('open_downloads_folder', {});
-        }
+        triggerOpenFolder();
       };
       rightNav.insertBefore(folderBtn, rightNav.firstChild);
     }
@@ -593,16 +763,16 @@
     .ytp-ad-preview-container,
     ytd-promoted-sparkles-web-renderer,
     ytmusic-guide-entry-renderer:has(a[href*="premium"]),
-    a[href*="music.youtube.com/premium"],
-    #top-level-buttons-computed > ytd-button-renderer:has(a[href*="premium"]) {
+    ytmusic-guide-entry-renderer:has(yt-formatted-string[title*="Upgrade"]) {
       display: none !important;
       visibility: hidden !important;
+      opacity: 0 !important;
       pointer-events: none !important;
       height: 0 !important;
       width: 0 !important;
     }
 
-    /* Ultra-sleek Dark Scrollbars */
+    /* Sleek Dark Scrollbars */
     ::-webkit-scrollbar {
       width: 8px !important;
       height: 8px !important;
@@ -704,107 +874,39 @@
       height: 16px;
       fill: #ffffff;
     }
-
-    /* Toast Notifications Container: Maximum Priority */
-    #ytm-toast-container {
-      position: fixed;
-      bottom: 84px;
-      right: 24px;
-      z-index: 2147483647 !important;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      pointer-events: none;
-    }
-    .ytm-toast {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 20px;
-      background: rgba(18, 20, 28, 0.96);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      color: #ffffff;
-      font-size: 13px;
-      font-weight: 500;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 1px rgba(255, 255, 255, 0.2);
-      animation: ytm-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      max-width: 420px;
-    }
-    .ytm-toast-loading {
-      border-color: rgba(255, 0, 0, 0.5);
-    }
-    .ytm-toast-success {
-      border-color: rgba(34, 197, 94, 0.6);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 0 0 12px rgba(34, 197, 94, 0.2);
-    }
-    .ytm-toast-error {
-      border-color: rgba(239, 68, 68, 0.6);
-    }
-    .ytm-toast-fade {
-      opacity: 0;
-      transform: translateY(10px);
-      transition: all 0.3s ease;
-    }
-    .ytm-toast-action {
-      background: rgba(255, 255, 255, 0.15);
-      border: none;
-      color: #ffffff;
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-left: auto;
-      white-space: nowrap;
-      transition: background 0.2s ease;
-    }
-    .ytm-toast-action:hover {
-      background: #ff0000;
-    }
-    .ytm-toast-icon {
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .ytm-spinner {
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.2);
-      border-top-color: #ff0000;
-      border-radius: 50%;
-      animation: ytm-spin 0.7s linear infinite;
-    }
-    @keyframes ytm-spin {
-      to { transform: rotate(360deg); }
-    }
-    @keyframes ytm-toast-in {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
   `;
 
   let baseStyleEl = null;
   let themeStyleEl = null;
 
   function injectBaseStyles() {
-    if (!baseStyleEl) {
-      baseStyleEl = document.createElement('style');
-      baseStyleEl.id = 'ytm-native-base-styles';
-      baseStyleEl.textContent = BASE_ENHANCEMENT_CSS;
-      (document.head || document.documentElement).appendChild(baseStyleEl);
+    if (baseStyleEl) return;
+    const parent = document.head || document.documentElement;
+    if (!parent) {
+      setTimeout(injectBaseStyles, 50);
+      return;
     }
+    baseStyleEl = document.createElement('style');
+    baseStyleEl.id = 'ytm-native-base-styles';
+    baseStyleEl.textContent = BASE_ENHANCEMENT_CSS;
+    parent.appendChild(baseStyleEl);
   }
 
   function applyTheme(themeKey) {
     if (!THEMES[themeKey]) themeKey = 'amoled';
-    localStorage.setItem('ytm_native_theme', themeKey);
+    try {
+      localStorage.setItem('ytm_native_theme', themeKey);
+    } catch (e) {}
 
+    const parent = document.head || document.documentElement;
+    if (!parent) {
+      setTimeout(() => applyTheme(themeKey), 50);
+      return;
+    }
     if (!themeStyleEl) {
       themeStyleEl = document.createElement('style');
       themeStyleEl.id = 'ytm-native-theme-styles';
-      (document.head || document.documentElement).appendChild(themeStyleEl);
+      parent.appendChild(themeStyleEl);
     }
     themeStyleEl.textContent = THEMES[themeKey].css;
 
@@ -815,7 +917,13 @@
   }
 
   window.__ytm_set_theme = applyTheme;
-  window.__ytm_get_theme = () => localStorage.getItem('ytm_native_theme') || 'amoled';
+  window.__ytm_get_theme = () => {
+    try {
+      return localStorage.getItem('ytm_native_theme') || 'amoled';
+    } catch (e) {
+      return 'amoled';
+    }
+  };
 
   function installThemePill() {
     if (document.getElementById('ytm-native-theme-pill')) return;
@@ -836,13 +944,13 @@
     const themeKeys = ['amoled', 'obsidian', 'studio'];
     pill.addEventListener('click', (e) => {
       e.stopPropagation();
-      const current = localStorage.getItem('ytm_native_theme') || 'amoled';
+      const current = window.__ytm_get_theme();
       const nextIdx = (themeKeys.indexOf(current) + 1) % themeKeys.length;
       applyTheme(themeKeys[nextIdx]);
     });
 
     rightNav.insertBefore(pill, rightNav.firstChild);
-    const active = localStorage.getItem('ytm_native_theme') || 'amoled';
+    const active = window.__ytm_get_theme();
     const label = document.getElementById('ytm-theme-label');
     if (label) label.textContent = THEMES[active].name;
   }
@@ -867,12 +975,11 @@
 
   function getMediaInfo() {
     const video = document.querySelector('video');
-    const titleEl = document.querySelector('ytmusic-player-bar .title');
-    const bylineEl = document.querySelector('ytmusic-player-bar .byline');
+    const track = getCurrentTrackDetails();
     const artworkEl = document.querySelector('ytmusic-player-bar .image');
 
-    const title = (titleEl ? titleEl.textContent.trim() : '') || (navigator.mediaSession && navigator.mediaSession.metadata ? navigator.mediaSession.metadata.title : '');
-    const artist = (bylineEl ? bylineEl.textContent.trim() : '') || (navigator.mediaSession && navigator.mediaSession.metadata ? navigator.mediaSession.metadata.artist : '');
+    const title = track.title;
+    const artist = track.artist;
     const artwork = (artworkEl ? artworkEl.src : '') || (navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.artwork && navigator.mediaSession.metadata.artwork[0] ? navigator.mediaSession.metadata.artwork[0].src : '');
 
     const isPlaying = video ? !video.paused : false;
@@ -891,7 +998,7 @@
 
   function syncMediaState() {
     const info = getMediaInfo();
-    if (window.__TAURI__ && window.__TAURI__.event) {
+    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
       window.__TAURI__.event.emit('track_change', info);
     }
   }
@@ -899,31 +1006,44 @@
   setInterval(syncMediaState, 2000);
 
   /* ==========================================================================
-     7. INITIALIZATION & OBSERVER
+     7. INITIALIZATION & RESILIENT OBSERVER
      ========================================================================== */
   function injectComponents() {
-    installThemePill();
-    installNavbarButtons();
-    installPlayerDownloadButton();
-    installPlaylistHeaderButton();
+    try {
+      installThemePill();
+      installNavbarButtons();
+      installPlayerDownloadButton();
+      installPlaylistHeaderButton();
+    } catch (e) {
+      console.warn('[YTM-Native] Component injection notice:', e);
+    }
+  }
+
+  function startObserver() {
+    if (!document.documentElement) {
+      setTimeout(startObserver, 50);
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      injectComponents();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   function init() {
     injectBaseStyles();
-    const savedTheme = localStorage.getItem('ytm_native_theme') || 'amoled';
+    const savedTheme = window.__ytm_get_theme();
     applyTheme(savedTheme);
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', injectComponents);
+      document.addEventListener('DOMContentLoaded', () => {
+        injectComponents();
+        startObserver();
+      });
     } else {
       injectComponents();
+      startObserver();
     }
-
-    const observer = new MutationObserver(() => {
-      injectComponents();
-    });
-
-    observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
   init();

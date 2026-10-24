@@ -7,8 +7,18 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Listener, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Listener, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
+
+#[tauri::command]
+fn trigger_download(app: AppHandle, req: DownloadRequest) {
+    downloader::start_download(app, req);
+}
+
+#[tauri::command]
+fn open_downloads_folder() {
+    downloader::open_downloads_folder();
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -16,6 +26,7 @@ pub fn run() {
     let discord_for_events = discord_service.clone();
 
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![trigger_download, open_downloads_folder])
         .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
