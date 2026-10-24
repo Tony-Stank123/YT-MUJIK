@@ -309,16 +309,23 @@
     let artist = '';
     let playlistId = null;
 
-    // Tier 1: HTML5 video player API (The authoritative source in YouTube Music!)
-    const player = document.querySelector('#movie_player, .html5-video-player');
+    // Tier 1: MediaSession API (Authoritative & instant across YouTube Music)
+    if (navigator.mediaSession && navigator.mediaSession.metadata) {
+      const meta = navigator.mediaSession.metadata;
+      if (meta.title && meta.title.trim()) title = meta.title.trim();
+      if (meta.artist && meta.artist.trim()) artist = meta.artist.trim();
+    }
+
+    // Tier 2: HTML5 video player API (Deep query across Shadow DOM)
+    const player = queryDeep('#movie_player, .html5-video-player');
     if (player) {
       if (typeof player.getVideoData === 'function') {
         try {
           const vData = player.getVideoData();
           if (vData) {
             if (vData.video_id) videoId = vData.video_id;
-            if (vData.title) title = vData.title.trim();
-            if (vData.author) artist = vData.author.trim();
+            if (!title && vData.title) title = vData.title.trim();
+            if (!artist && vData.author) artist = vData.author.trim();
           }
         } catch (e) {}
       }
@@ -335,25 +342,19 @@
       }
     }
 
-    // Tier 2: MediaSession API
-    if (navigator.mediaSession && navigator.mediaSession.metadata) {
-      const meta = navigator.mediaSession.metadata;
-      if (!title && meta.title) title = meta.title.trim();
-      if (!artist && meta.artist) artist = meta.artist.trim();
-    }
-
     // Tier 3: DOM Player Bar Elements (Deep shadow DOM query)
-    const playerBar = document.querySelector('ytmusic-player-bar');
-    const pbRoot = playerBar ? (playerBar.shadowRoot || playerBar) : document;
-
-    const titleEl = pbRoot.querySelector('.title, yt-formatted-string.title');
-    if (!title && titleEl) {
-      title = titleEl.textContent.trim();
+    if (!title) {
+      const titleEl = queryDeep('ytmusic-player-bar .title, ytmusic-player-bar yt-formatted-string.title, .title.ytmusic-player-bar, ytmusic-player-bar .content-info-wrapper yt-formatted-string');
+      if (titleEl && titleEl.textContent && titleEl.textContent.trim()) {
+        title = titleEl.textContent.trim();
+      }
     }
 
-    const bylineEl = pbRoot.querySelector('.byline, yt-formatted-string.byline');
-    if (!artist && bylineEl) {
-      artist = bylineEl.textContent.trim();
+    if (!artist) {
+      const bylineEl = queryDeep('ytmusic-player-bar .byline, ytmusic-player-bar yt-formatted-string.byline, .byline.ytmusic-player-bar, ytmusic-player-bar .content-info-wrapper .byline');
+      if (bylineEl && bylineEl.textContent && bylineEl.textContent.trim()) {
+        artist = bylineEl.textContent.trim();
+      }
     }
 
     // Tier 4: Location URL or player bar link
@@ -361,7 +362,7 @@
       videoId = extractVideoId(window.location.href);
     }
     if (!videoId) {
-      const link = pbRoot.querySelector('a[href*="watch"], a[href*="v="]');
+      const link = queryDeep('ytmusic-player-bar a[href*="watch"], ytmusic-player-bar a[href*="v="]');
       if (link && link.href) {
         videoId = extractVideoId(link.href);
       }
@@ -372,6 +373,119 @@
     }
 
     return { videoId, title, artist, playlistId };
+  }
+
+  function promptSongDownload() {
+    if (document.getElementById('ytm-prompt-modal')) return;
+
+    const modal = document.createElement('div');
+    modal.id = 'ytm-prompt-modal';
+    modal.style.cssText = [
+      'position: fixed !important',
+      'top: 0 !important',
+      'left: 0 !important',
+      'width: 100vw !important',
+      'height: 100vh !important',
+      'background: rgba(0, 0, 0, 0.75) !important',
+      'backdrop-filter: blur(12px) !important',
+      'z-index: 2147483647 !important',
+      'display: flex !important',
+      'align-items: center !important',
+      'justify-content: center !important'
+    ].join(';');
+
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'background: #11131a !important',
+      'border: 1.5px solid rgba(255, 0, 0, 0.5) !important',
+      'border-radius: 16px !important',
+      'padding: 24px 28px !important',
+      'max-width: 440px !important',
+      'width: 90% !important',
+      'box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9) !important',
+      'display: flex !important',
+      'flex-direction: column !important',
+      'gap: 16px !important',
+      'font-family: system-ui, -apple-system, sans-serif !important',
+      'color: #ffffff !important'
+    ].join(';');
+
+    card.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:22px;">⬇️</span>
+        <div>
+          <div style="font-size:16px; font-weight:700;">Download Song in MP4</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.6);">Play a song or enter any song name below</div>
+        </div>
+      </div>
+      <input id="ytm-prompt-input" type="text" placeholder="e.g. Paaro or Aditya Rikhari" style="
+        background: #181b24 !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 8px !important;
+        color: #ffffff !important;
+        font-size: 14px !important;
+        padding: 10px 14px !important;
+        outline: none !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      " />
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button id="ytm-prompt-cancel" style="
+          background: rgba(255,255,255,0.1) !important;
+          border: none !important;
+          border-radius: 8px !important;
+          color: #fff !important;
+          padding: 8px 16px !important;
+          cursor: pointer !important;
+          font-weight: 600 !important;
+        ">Cancel</button>
+        <button id="ytm-prompt-submit" style="
+          background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important;
+          border: none !important;
+          border-radius: 8px !important;
+          color: #fff !important;
+          padding: 8px 20px !important;
+          cursor: pointer !important;
+          font-weight: 700 !important;
+          box-shadow: 0 4px 12px rgba(255,0,0,0.4) !important;
+        ">⬇️ Download</button>
+      </div>
+    `;
+
+    modal.appendChild(card);
+    (document.body || document.documentElement).appendChild(modal);
+
+    const input = card.querySelector('#ytm-prompt-input');
+    const cancelBtn = card.querySelector('#ytm-prompt-cancel');
+    const submitBtn = card.querySelector('#ytm-prompt-submit');
+
+    if (input) input.focus();
+
+    const doSubmit = () => {
+      const val = input ? input.value.trim() : '';
+      modal.remove();
+      if (!val) {
+        showToast('⚠️ No song entered.', 'error');
+        return;
+      }
+      showToast(`Searching & downloading "${val}" (MP4)...`, 'loading');
+      sendDownloadRequest({
+        downloadType: 'song',
+        url: `ytsearch1:${val}`,
+        title: val,
+        artist: '',
+        lyrics: null
+      });
+    };
+
+    if (submitBtn) submitBtn.onclick = doSubmit;
+    if (cancelBtn) cancelBtn.onclick = () => modal.remove();
+    if (input) {
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') doSubmit();
+        if (e.key === 'Escape') modal.remove();
+      };
+    }
   }
 
   function extractCurrentLyrics() {
@@ -413,12 +527,12 @@
     const track = getCurrentTrackDetails();
     let currentUrl = customVideoUrl || window.location.href;
     let videoId = customVideoUrl ? extractVideoId(customVideoUrl) : track.videoId;
-    let title = customTitle || track.title || 'Music Track';
+    let title = customTitle || track.title || '';
     let artist = track.artist || '';
 
-    // If nothing is playing and no title or videoId found
+    // If nothing is playing and no title or videoId found, prompt the user!
     if (!videoId && (!title || title === 'Music Track' || title === 'Current Song')) {
-      showToast('⚠️ No song is currently playing. Start a song first!', 'error');
+      promptSongDownload();
       return;
     }
 

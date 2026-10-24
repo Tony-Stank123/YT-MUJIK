@@ -45,6 +45,48 @@ pub fn get_ffmpeg_path() -> Option<PathBuf> {
     None
 }
 
+pub fn create_ytdlp_command() -> Command {
+    let local_paths = [
+        PathBuf::from(r"C:\E shift\yt music\bin\yt-dlp.exe"),
+        PathBuf::from("bin/yt-dlp.exe"),
+        PathBuf::from("yt-dlp.exe"),
+        PathBuf::from(r"C:\Users\satis\AppData\Local\Programs\Python\Python312\Scripts\yt-dlp.exe"),
+    ];
+    for p in &local_paths {
+        if p.exists() {
+            return Command::new(p);
+        }
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let p1 = exe_dir.join("bin").join("yt-dlp.exe");
+            if p1.exists() {
+                return Command::new(p1);
+            }
+            let p2 = exe_dir.join("yt-dlp.exe");
+            if p2.exists() {
+                return Command::new(p2);
+            }
+        }
+    }
+
+    let python_paths = [
+        PathBuf::from(r"C:\Users\satis\AppData\Local\Programs\Python\Python312\python.exe"),
+    ];
+    for p in &python_paths {
+        if p.exists() {
+            let mut cmd = Command::new(p);
+            cmd.args(&["-m", "yt_dlp"]);
+            return cmd;
+        }
+    }
+
+    let mut cmd = Command::new("python");
+    cmd.args(&["-m", "yt_dlp"]);
+    cmd
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadRequest {
@@ -208,10 +250,8 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
             format!(r"{}\%(title)s.%(ext)s", downloads_dir.display())
         };
 
-        let mut cmd = Command::new("python");
+        let mut cmd = create_ytdlp_command();
         cmd.args(&[
-            "-m",
-            "yt_dlp",
             "--js-runtimes",
             "node",
             "--remote-components",
@@ -254,10 +294,8 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                     };
                     let retry_url = format!("ytsearch1:{}", search_term);
 
-                    let mut retry_cmd = Command::new("python");
+                    let mut retry_cmd = create_ytdlp_command();
                     retry_cmd.args(&[
-                        "-m",
-                        "yt_dlp",
                         "--js-runtimes",
                         "node",
                         "--remote-components",
