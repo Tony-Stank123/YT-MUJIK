@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Listener, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Listener, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 #[tauri::command]
@@ -41,22 +41,13 @@ pub fn run() {
                 .map_err(tauri::Error::InvalidUrl)?;
             let init_script = include_str!("injected.js");
 
-            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(target_url))
+            let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(target_url))
                 .title("YouTube Music")
                 .inner_size(1360.0, 860.0)
                 .min_inner_size(850.0, 550.0)
                 .theme(Some(tauri::Theme::Dark))
                 .initialization_script(init_script)
                 .build()?;
-
-            // 2. Intercept Close Request: Hide to System Tray instead of terminating app
-            let window_for_close = window.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window_for_close.hide();
-                }
-            });
 
             // 3. Build Tray Context Menu
             let play_pause_item = MenuItemBuilder::new("▶ / ⏸  Play / Pause")
