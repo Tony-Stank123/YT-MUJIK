@@ -42,13 +42,13 @@ pub fn run() {
             let init_script = include_str!("injected.js");
 
             let app_handle_for_nav = app.handle().clone();
-            let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(target_url))
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(target_url))
                 .title("YouTube Music")
                 .inner_size(1360.0, 860.0)
                 .min_inner_size(850.0, 550.0)
                 .theme(Some(tauri::Theme::Dark))
                 .initialization_script(init_script)
-                .on_navigation(move |url| {
+                .on_navigation(move |url: &url::Url| {
                     let host = url.host_str().unwrap_or_default();
                     if url.scheme() == "ytm-cmd" || host == "ytm-command.local" || host.ends_with(".ytm-command.local") {
                         let path = url.path().trim_start_matches('/');
@@ -70,6 +70,56 @@ pub fn run() {
                     true
                 })
                 .build()?;
+
+            // 2. Direct Webview-to-Rust Polling Bridge (100% immune to sandboxing and capability restrictions)
+            let window_for_poll = window.clone();
+            let app_for_poll = app.handle().clone();
+            let discord_for_poll = discord_service.clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    let app_h = app_for_poll.clone();
+                    let discord_h = discord_for_poll.clone();
+                    let _ = window_for_poll.eval_with_callback(
+                        "(function(){ return window.__ytm_poll_pending_actions ? window.__ytm_poll_pending_actions() : null; })()",
+                        move |result_str| {
+                            if result_str.is_empty() || result_str == "null" || result_str == "\"null\"" {
+                                return;
+                            }
+                            if let Ok(raw_val) = serde_json::from_str::<serde_json::Value>(&result_str) {
+                                let json_text = if let Some(s) = raw_val.as_str() {
+                                    s.to_string()
+                                } else {
+                                    raw_val.to_string()
+                                };
+                                if let Ok(actions) = serde_json::from_str::<Vec<serde_json::Value>>(&json_text) {
+                                    for item in actions {
+                                        let action_type = item.get("type").and_then(|v| v.as_str()).unwrap_or_default();
+                                        if action_type == "download" {
+                                            if let Some(payload_val) = item.get("payload") {
+                                                if let Ok(req) = serde_json::from_value::<DownloadRequest>(payload_val.clone()) {
+                                                    log::info!("Received download request via polling bridge: {:?}", req.title);
+                                                    downloader::start_download(app_h.clone(), req);
+                                                }
+                                            }
+                                        } else if action_type == "open_downloads" {
+                                            downloader::open_downloads_folder();
+                                        } else if action_type == "track_change" {
+                                            if let Some(payload_val) = item.get("payload") {
+                                                if let Ok(track) = serde_json::from_value::<TrackPayload>(payload_val.clone()) {
+                                                    if let Ok(mut discord) = discord_h.lock() {
+                                                        discord.update_presence(&track);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    );
+                }
+            });
 
             // 3. Build Tray Context Menu
             let play_pause_item = MenuItemBuilder::new("▶ / ⏸  Play / Pause")

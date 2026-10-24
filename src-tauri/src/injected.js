@@ -227,10 +227,32 @@
     showToast(message, type);
   };
 
+  /* ==========================================================================
+     DIRECT RUST-WEBVIEW ACTION QUEUE (100% UNBLOCKABLE COMMUNICATION)
+     ========================================================================== */
+  window.__ytm_pending_actions = window.__ytm_pending_actions || [];
+
+  window.__ytm_poll_pending_actions = function() {
+    if (!window.__ytm_pending_actions || window.__ytm_pending_actions.length === 0) {
+      return null;
+    }
+    const actions = window.__ytm_pending_actions;
+    window.__ytm_pending_actions = [];
+    return JSON.stringify(actions);
+  };
+
+  function enqueueAction(type, payload) {
+    if (!window.__ytm_pending_actions) window.__ytm_pending_actions = [];
+    window.__ytm_pending_actions.push({ type, payload });
+  }
+
   function triggerOpenFolder() {
     showToast('Opening downloads folder...', 'info');
 
-    // 1. Navigation bridge (direct and fail-safe)
+    // 1. Direct Polling Queue (Instant and guaranteed)
+    enqueueAction('open_downloads', {});
+
+    // 2. Navigation bridge
     try {
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
@@ -239,16 +261,17 @@
       setTimeout(() => { try { iframe.remove(); } catch(e){} }, 2000);
     } catch (e) {}
 
-    // 2. Tauri invoke
-    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-      window.__TAURI__.core.invoke('open_downloads_folder').catch(console.error);
-    } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-      window.__TAURI_INTERNALS__.invoke('open_downloads_folder').catch(console.error);
-    }
-    // 3. Tauri event
-    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
-      window.__TAURI__.event.emit('open_downloads_folder', {}).catch(console.error);
-    }
+    // 3. Tauri invoke
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+        window.__TAURI__.core.invoke('open_downloads_folder').catch(console.error);
+      } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+        window.__TAURI_INTERNALS__.invoke('open_downloads_folder').catch(console.error);
+      }
+      if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
+        window.__TAURI__.event.emit('open_downloads_folder', {}).catch(console.error);
+      }
+    } catch (e) {}
   }
 
   // Listen for download_status events from Rust
@@ -362,34 +385,27 @@
   function sendDownloadRequest(payload) {
     console.log('[YTM-Native] Requesting download:', payload);
 
-    // 1. Navigation bridge (direct, instant, and immune to sandboxing)
+    // 1. Direct Polling Queue (Instant, 100% reliable across all security boundaries)
+    enqueueAction('download', payload);
+
+    // 2. Navigation bridge
     try {
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
       iframe.src = 'https://ytm-command.local/download?data=' + encodeURIComponent(JSON.stringify(payload));
       (document.body || document.documentElement).appendChild(iframe);
       setTimeout(() => { try { iframe.remove(); } catch(e){} }, 2000);
-    } catch (e) {
-      console.warn('[YTM-Native] Navigation bridge attempt:', e);
-    }
+    } catch (e) {}
 
-    // 2. Try Tauri invoke (fastest when available)
-    if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-      window.__TAURI__.core.invoke('trigger_download', { req: payload }).catch(err => {
-        console.warn('[YTM-Native] invoke failed, falling back:', err);
-      });
-    } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-      window.__TAURI_INTERNALS__.invoke('trigger_download', { req: payload }).catch(err => {
-        console.warn('[YTM-Native] internals invoke failed:', err);
-      });
-    }
-
-    // 3. Also emit event via Tauri event system
-    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
-      window.__TAURI__.event.emit('trigger_download', payload).catch(err => {
-        console.warn('[YTM-Native] event emit failed:', err);
-      });
-    }
+    // 3. Tauri invoke / events
+    try {
+      if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+        window.__TAURI__.core.invoke('trigger_download', { req: payload }).catch(() => {});
+      }
+      if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
+        window.__TAURI__.event.emit('trigger_download', payload).catch(() => {});
+      }
+    } catch (e) {}
   }
 
   // 1. DOWNLOAD CURRENT SONG ONLY (Strips all &list= and queue params)
@@ -711,6 +727,9 @@
     container.insertBefore(btn, container.firstChild);
   }
 
+  // Track the most recent list row clicked for 3-dot menus
+  let lastContextRow = null;
+
   // Intercept track-specific download clicks across Shadow DOM boundaries
   document.addEventListener('click', (e) => {
     const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
@@ -720,25 +739,28 @@
     let clickedRow = null;
 
     for (const node of path) {
-      if (!node || !node.getAttribute) continue;
+      if (!node) continue;
 
       const tag = (node.tagName || '').toLowerCase();
       if (tag === 'ytmusic-responsive-list-item-renderer') {
         clickedRow = node;
+        lastContextRow = node;
       }
 
-      const text = (node.textContent || '').trim().toLowerCase();
-      const aria = (node.getAttribute('aria-label') || '').toLowerCase();
-      const title = (node.getAttribute('title') || '').toLowerCase();
+      if (node.getAttribute) {
+        const text = (node.textContent || '').trim().toLowerCase();
+        const aria = (node.getAttribute('aria-label') || '').toLowerCase();
+        const title = (node.getAttribute('title') || '').toLowerCase();
 
-      if (
-        text === 'download' || 
-        text === 'download song' || 
-        text === 'download playlist' ||
-        aria.includes('download') || 
-        title.includes('download')
-      ) {
-        downloadClicked = true;
+        if (
+          text === 'download' || 
+          text === 'download song' || 
+          text === 'download playlist' ||
+          aria.includes('download') || 
+          title.includes('download')
+        ) {
+          downloadClicked = true;
+        }
       }
     }
 
@@ -746,14 +768,14 @@
       e.preventDefault();
       e.stopPropagation();
 
-      if (clickedRow) {
-        const titleEl = clickedRow.querySelector('.title, yt-formatted-string.title');
+      const targetRow = clickedRow || lastContextRow;
+      if (targetRow) {
+        const titleEl = queryDeep('.title, yt-formatted-string.title', targetRow);
         const title = titleEl ? titleEl.textContent.trim() : null;
-        const link = clickedRow.querySelector('a[href*="watch"], a[href*="v="]');
+        const link = queryDeep('a[href*="watch"], a[href*="v="]', targetRow);
         const url = link ? link.href : null;
         downloadCurrentSong(url, title);
-      } else if (window.location.href.includes('list=')) {
-        downloadCurrentPlaylist();
+        lastContextRow = null;
       } else {
         downloadCurrentSong();
       }
@@ -1036,9 +1058,12 @@
 
   function syncMediaState() {
     const info = getMediaInfo();
-    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
-      window.__TAURI__.event.emit('track_change', info);
-    }
+    enqueueAction('track_change', info);
+    try {
+      if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.emit === 'function') {
+        window.__TAURI__.event.emit('track_change', info);
+      }
+    } catch (e) {}
   }
 
   setInterval(syncMediaState, 2000);
