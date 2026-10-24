@@ -3,7 +3,7 @@ use std::fs;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 const FFMPEG_PATH: &str = r"C:\Users\satis\AppData\Local\Programs\Python\Python312\Scripts\ffmpeg.exe";
@@ -71,6 +71,21 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
             clean_url = clean_url.replace("music.youtube.com", "www.youtube.com");
         }
 
+        // For single song downloads, strictly strip any playlist/queue parameters (&list=... or &index=...)
+        if !is_playlist {
+            if let Some(idx) = clean_url.find("&list=") {
+                clean_url = clean_url[..idx].to_string();
+            }
+            if let Some(idx) = clean_url.find("?list=") {
+                // If the URL is only ?list=, do not strip, but for watch URLs strip
+                if clean_url.contains("/watch") {
+                    clean_url = clean_url[..idx].to_string();
+                }
+            }
+        }
+
+        log::info!("Starting download [{}] URL: {}", if is_playlist { "PLAYLIST" } else { "SONG" }, clean_url);
+
         // Notify UI download started
         let started_msg = if is_playlist {
             format!("Downloading playlist \"{}\" (MP4)...", title)
@@ -82,10 +97,19 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
             "download_status",
             DownloadStatus {
                 status: "started".into(),
-                message: started_msg,
+                message: started_msg.clone(),
                 title: title.clone(),
             },
         );
+
+        if let Some(w) = app.get_webview_window("main") {
+            let safe_title = title.replace('"', "\\\"").replace('\'', "\\'");
+            let js = format!(
+                "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Downloading \\\"{}\\\" in MP4...\", \"loading\");",
+                safe_title
+            );
+            let _ = w.eval(&js);
+        }
 
         // Save lyrics text file if lyrics were extracted from YouTube Music
         if let Some(ref lyrics_text) = req.lyrics {
@@ -158,10 +182,19 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         "download_status",
                         DownloadStatus {
                             status: "completed".into(),
-                            message: success_msg,
+                            message: success_msg.clone(),
                             title: title.clone(),
                         },
                     );
+
+                    if let Some(w) = app.get_webview_window("main") {
+                        let safe_msg = success_msg.replace('"', "\\\"").replace('\'', "\\'");
+                        let js = format!(
+                            "if (window.__ytm_show_toast) window.__ytm_show_toast(\"{}\", \"success\");",
+                            safe_msg
+                        );
+                        let _ = w.eval(&js);
+                    }
                 } else {
                     let err_str = String::from_utf8_lossy(&output.stderr);
                     log::error!("yt-dlp download failed: {}", err_str);
@@ -169,10 +202,15 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         "download_status",
                         DownloadStatus {
                             status: "error".into(),
-                            message: format!("Download failed. Please check internet connection."),
+                            message: "Download failed. Please check internet connection.".into(),
                             title: title.clone(),
                         },
                     );
+
+                    if let Some(w) = app.get_webview_window("main") {
+                        let js = "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Download failed. Please check internet connection.\", \"error\");";
+                        let _ = w.eval(js);
+                    }
                 }
             }
             Err(e) => {
@@ -185,6 +223,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         title: title.clone(),
                     },
                 );
+
+                if let Some(w) = app.get_webview_window("main") {
+                    let js = "if (window.__ytm_show_toast) window.__ytm_show_toast(\"Could not launch downloader.\", \"error\");";
+                    let _ = w.eval(js);
+                }
             }
         }
     });
