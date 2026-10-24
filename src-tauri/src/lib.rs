@@ -1,6 +1,8 @@
 mod discord;
+mod downloader;
 
 use discord::{DiscordService, TrackPayload};
+use downloader::DownloadRequest;
 use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
@@ -60,6 +62,20 @@ pub fn run() {
 
             let sep1 = PredefinedMenuItem::separator(app)?;
 
+            let dl_song_item = MenuItemBuilder::new("⬇️  Download Current Song (MP4)")
+                .id("download_song")
+                .build(app)?;
+
+            let dl_playlist_item = MenuItemBuilder::new("⬇️  Download Current Playlist (MP4)")
+                .id("download_playlist")
+                .build(app)?;
+
+            let open_dl_item = MenuItemBuilder::new("📂  Open Downloads Folder")
+                .id("open_downloads")
+                .build(app)?;
+
+            let sep2 = PredefinedMenuItem::separator(app)?;
+
             let theme_amoled = MenuItemBuilder::new("🎨  Theme: AMOLED Black")
                 .id("theme_amoled")
                 .build(app)?;
@@ -72,7 +88,7 @@ pub fn run() {
                 .id("theme_studio")
                 .build(app)?;
 
-            let sep2 = PredefinedMenuItem::separator(app)?;
+            let sep3 = PredefinedMenuItem::separator(app)?;
 
             let show_item = MenuItemBuilder::new("🪟  Show YouTube Music")
                 .id("show")
@@ -88,10 +104,14 @@ pub fn run() {
                     &next_item,
                     &prev_item,
                     &sep1,
+                    &dl_song_item,
+                    &dl_playlist_item,
+                    &open_dl_item,
+                    &sep2,
                     &theme_amoled,
                     &theme_obsidian,
                     &theme_studio,
-                    &sep2,
+                    &sep3,
                     &show_item,
                     &quit_item,
                 ])
@@ -123,6 +143,19 @@ pub fn run() {
                             if let Some(w) = maybe_window {
                                 let _ = w.eval("window.__ytm_prev()");
                             }
+                        }
+                        "download_song" => {
+                            if let Some(w) = maybe_window {
+                                let _ = w.eval("window.__ytm_download_current_song()");
+                            }
+                        }
+                        "download_playlist" => {
+                            if let Some(w) = maybe_window {
+                                let _ = w.eval("window.__ytm_download_current_playlist()");
+                            }
+                        }
+                        "open_downloads" => {
+                            downloader::open_downloads_folder();
                         }
                         "theme_amoled" => {
                             if let Some(w) = maybe_window {
@@ -183,6 +216,18 @@ pub fn run() {
                         service.update_presence(&payload);
                     }
                 }
+            });
+
+            // 6. Downloader Event Listeners
+            let app_handle_for_dl = app.handle().clone();
+            app.listen("trigger_download", move |event| {
+                if let Ok(req) = serde_json::from_str::<DownloadRequest>(event.payload()) {
+                    downloader::start_download(app_handle_for_dl.clone(), req);
+                }
+            });
+
+            app.listen("open_downloads_folder", move |_| {
+                downloader::open_downloads_folder();
             });
 
             Ok(())

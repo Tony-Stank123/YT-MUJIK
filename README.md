@@ -39,6 +39,14 @@ A hyper-lightweight, high-performance native desktop application for **YouTube M
     - ❌ Quit
   - Left-clicking the tray icon toggles the app window.
 
+- **⬇️ 1-Click MP4 Music & Playlist Downloader (with Lyrics)**
+  - Dedicated **"Download MP4"** button in the player bar and **"Download Playlist"** button on playlist/album pages.
+  - Automatically intercepts native YouTube Music download buttons and downloads the track directly (bypassing any Premium paywall!).
+  - Downloads in **high quality `.mp4` format** with embedded album art, metadata, and embedded subtitles.
+  - Automatically extracts and saves companion lyrics files (`<Title> - Lyrics.txt`) in the downloads folder!
+  - Stores all music in the dedicated `downloads\` folder in the root directory for easy access.
+  - Quick **"📂 Downloads"** button in top navbar and tray menu opens the folder directly in Windows Explorer.
+
 - **🎮 Discord Rich Presence**
   - Automatically updates your Discord profile with:
     - *"Listening to YouTube Music"*
