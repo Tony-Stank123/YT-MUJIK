@@ -87,13 +87,18 @@ pub fn create_ytdlp_command() -> Command {
     cmd
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadRequest {
-    pub download_type: String, // "song" or "playlist"
-    pub url: String,
+    #[serde(default)]
+    pub download_type: Option<String>, // "song" or "playlist"
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
     pub title: Option<String>,
+    #[serde(default)]
     pub artist: Option<String>,
+    #[serde(default)]
     pub lyrics: Option<String>,
 }
 
@@ -103,6 +108,14 @@ pub struct DownloadStatus {
     pub status: String, // "started", "completed", "error"
     pub message: String,
     pub title: String,
+}
+
+pub fn log_to_file(msg: &str) {
+    use std::io::Write;
+    let log_path = PathBuf::from(r"C:\E shift\yt music\app_debug.log");
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{}] {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0), msg);
+    }
 }
 
 pub fn get_downloads_dir() -> PathBuf {
@@ -122,6 +135,7 @@ pub fn get_downloads_dir() -> PathBuf {
 
 pub fn open_downloads_folder() {
     let dir = get_downloads_dir();
+    log_to_file(&format!("Opening downloads folder: {:?}", dir));
     let _ = Command::new("explorer.exe")
         .arg(dir.to_str().unwrap_or(r"C:\E shift\yt music\downloads"))
         .spawn();
@@ -145,6 +159,7 @@ fn safe_js_string(s: &str) -> String {
 }
 
 fn notify_frontend(app: &AppHandle, message: &str, status: &str, title: &str) {
+    log_to_file(&format!("[NOTIFY FRONTEND] status: {}, msg: {}, title: {}", status, message, title));
     let _ = app.emit(
         "download_status",
         DownloadStatus {
@@ -163,8 +178,8 @@ fn notify_frontend(app: &AppHandle, message: &str, status: &str, title: &str) {
             _ => "info",
         };
         let js = format!(
-            "if (window.__ytm_show_toast) window.__ytm_show_toast(\"{}\", \"{}\");",
-            safe_msg, safe_type
+            "if (window.__ytm_show_toast) {{ window.__ytm_show_toast(\"{}\", \"{}\"); }} else if (window.showToast) {{ window.showToast(\"{}\", \"{}\"); }}",
+            safe_msg, safe_type, safe_msg, safe_type
         );
         let _ = w.eval(&js);
     }
@@ -173,20 +188,18 @@ fn notify_frontend(app: &AppHandle, message: &str, status: &str, title: &str) {
 pub fn start_download(app: AppHandle, req: DownloadRequest) {
     tauri::async_runtime::spawn(async move {
         let downloads_dir = get_downloads_dir();
-        let mut title = req.title.unwrap_or_else(|| "Music Track".into()).trim().to_string();
-        if title.is_empty() {
-            title = "Music Track".to_string();
-        }
+        let mut title = req.title.unwrap_or_default().trim().to_string();
         let artist = req.artist.unwrap_or_default().trim().to_string();
-        let is_playlist = req.download_type == "playlist";
+        let is_playlist = req.download_type.as_deref() == Some("playlist");
 
-        // Convert music.youtube.com to www.youtube.com
-        let mut clean_url = req.url.trim().to_string();
-        if clean_url.contains("music.youtube.com") {
-            clean_url = clean_url.replace("music.youtube.com", "www.youtube.com");
+        let mut raw_url = req.url.unwrap_or_default().trim().to_string();
+        if raw_url.contains("music.youtube.com") {
+            raw_url = raw_url.replace("music.youtube.com", "www.youtube.com");
         }
 
-        // For single song downloads, strictly strip any playlist/queue parameters (&list=... or &index=...)
+        log_to_file(&format!("[START DOWNLOAD] type: {}, raw_url: {}, title: {}, artist: {}", if is_playlist { "playlist" } else { "song" }, raw_url, title, artist));
+
+        let mut clean_url = raw_url.clone();
         if !is_playlist {
             if let Some(idx) = clean_url.find("&list=") {
                 clean_url = clean_url[..idx].to_string();
@@ -197,10 +210,10 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                 }
             }
 
-            // CRITICAL SAFEGUARD: If URL is root youtube.com, empty, or lacks video id, fallback to search!
-            if clean_url == "https://www.youtube.com"
+            // If URL lacks video id or is invalid, fallback to search using title & artist
+            if clean_url.is_empty()
+                || clean_url == "https://www.youtube.com"
                 || clean_url == "https://www.youtube.com/"
-                || clean_url.is_empty()
                 || (!clean_url.contains("watch?v=") && !clean_url.contains("youtu.be/") && !clean_url.starts_with("ytsearch1:"))
             {
                 if !title.is_empty() && title != "Music Track" && title != "Current Song" {
@@ -210,21 +223,23 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                         title.clone()
                     };
                     clean_url = format!("ytsearch1:{}", search_term);
-                    log::info!("Falling back to search query for single song download: {}", clean_url);
+                    log_to_file(&format!("[FALLBACK TO SEARCH] {}", clean_url));
                 } else {
-                    log::warn!("Cannot start single song download: no song is currently playing or selected.");
-                    notify_frontend(&app, "⚠️ No song is currently playing. Start a song first!", "error", &title);
+                    log_to_file("[WARN] No title or valid URL provided");
+                    notify_frontend(&app, "⚠️ Please play or click a song to download!", "error", &title);
                     return;
                 }
             }
         }
 
-        log::info!("Starting [{}] download: \"{}\" -> {}", if is_playlist { "PLAYLIST" } else { "SONG" }, title, clean_url);
+        if title.is_empty() {
+            title = if is_playlist { "Playlist".to_string() } else { "Music Track".to_string() };
+        }
 
         let started_msg = if is_playlist {
-            format!("Downloading playlist \"{}\" (MP4)...", title)
+            format!("Downloading playlist \"{}\" in MP4 format...", title)
         } else {
-            format!("Downloading \"{}\" (MP4)...", title)
+            format!("Downloading \"{}\" in MP4 format...", title)
         };
         notify_frontend(&app, &started_msg, "started", &title);
 
@@ -252,10 +267,6 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
 
         let mut cmd = create_ytdlp_command();
         cmd.args(&[
-            "--js-runtimes",
-            "node",
-            "--remote-components",
-            "ejs:github",
             "-f",
             "bestvideo[vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
             "--merge-output-format",
@@ -270,6 +281,11 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
             cmd.args(&["--ffmpeg-location", ffmpeg_path.to_str().unwrap_or_default()]);
         }
 
+        let node_path = PathBuf::from(r"C:\Program Files\nodejs\node.exe");
+        if node_path.exists() {
+            cmd.args(&["--js-runtimes", &format!("node:{}", node_path.display())]);
+        }
+
         if is_playlist {
             cmd.arg("--yes-playlist");
         } else {
@@ -279,14 +295,17 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
         cmd.arg(&clean_url);
         cmd.creation_flags(CREATE_NO_WINDOW);
 
+        log_to_file(&format!("[EXECUTE COMMAND] args: {:?}", cmd));
+
         match cmd.output() {
             Ok(output) => {
                 let stdout_str = String::from_utf8_lossy(&output.stdout);
                 let stderr_str = String::from_utf8_lossy(&output.stderr);
+                log_to_file(&format!("[YTDLP RESULT] exit_code: {:?}, stdout len: {}, stderr len: {}", output.status.code(), stdout_str.len(), stderr_str.len()));
 
                 // If single song download yielded 0 items, retry with ytsearch1
                 if !is_playlist && stdout_str.contains("Downloading 0 items") && !clean_url.starts_with("ytsearch1:") {
-                    log::warn!("Download yielded 0 items. Retrying with ytsearch1 for single song: {}", title);
+                    log_to_file(&format!("[RETRY WITH SEARCH] for title: {}", title));
                     let search_term = if !artist.is_empty() {
                         format!("{} {}", title, artist)
                     } else {
@@ -296,10 +315,6 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
 
                     let mut retry_cmd = create_ytdlp_command();
                     retry_cmd.args(&[
-                        "--js-runtimes",
-                        "node",
-                        "--remote-components",
-                        "ejs:github",
                         "-f",
                         "bestvideo[vcodec^=avc1][ext=mp4]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
                         "--merge-output-format",
@@ -312,6 +327,9 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                     ]);
                     if let Some(ref ffmpeg_path) = get_ffmpeg_path() {
                         retry_cmd.args(&["--ffmpeg-location", ffmpeg_path.to_str().unwrap_or_default()]);
+                    }
+                    if node_path.exists() {
+                        retry_cmd.args(&["--js-runtimes", &format!("node:{}", node_path.display())]);
                     }
                     retry_cmd.arg(&retry_url);
                     retry_cmd.creation_flags(CREATE_NO_WINDOW);
@@ -333,12 +351,12 @@ pub fn start_download(app: AppHandle, req: DownloadRequest) {
                     };
                     notify_frontend(&app, &success_msg, "completed", &title);
                 } else {
-                    log::error!("yt-dlp download failed: {}", stderr_str);
+                    log_to_file(&format!("[YTDLP ERROR] {}", stderr_str));
                     notify_frontend(&app, "Download failed. Please check internet connection.", "error", &title);
                 }
             }
             Err(e) => {
-                log::error!("Failed to launch yt-dlp process: {}", e);
+                log_to_file(&format!("[YTDLP LAUNCH ERROR] {}", e));
                 notify_frontend(&app, &format!("Could not launch downloader: {}", e), "error", &title);
             }
         }

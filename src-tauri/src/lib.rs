@@ -97,12 +97,16 @@ pub fn run() {
                                         let action_type = item.get("type").and_then(|v| v.as_str()).unwrap_or_default();
                                         if action_type == "download" {
                                             if let Some(payload_val) = item.get("payload") {
+                                                downloader::log_to_file(&format!("[POLL DISPATCH DOWNLOAD] payload: {:?}", payload_val));
                                                 if let Ok(req) = serde_json::from_value::<DownloadRequest>(payload_val.clone()) {
-                                                    log::info!("Received download request via polling bridge: {:?}", req.title);
+                                                    downloader::log_to_file(&format!("[POLL PARSED DOWNLOAD] title: {:?}", req.title));
                                                     downloader::start_download(app_h.clone(), req);
+                                                } else {
+                                                    downloader::log_to_file(&format!("[POLL PARSE ERROR] payload: {:?}", payload_val));
                                                 }
                                             }
                                         } else if action_type == "open_downloads" {
+                                            downloader::log_to_file("[POLL DISPATCH OPEN DOWNLOADS]");
                                             downloader::open_downloads_folder();
                                         } else if action_type == "track_change" {
                                             if let Some(payload_val) = item.get("payload") {
@@ -307,9 +311,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                api.prevent_close();
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                downloader::log_to_file("Window close requested, exiting application cleanly.");
+                window.app_handle().exit(0);
             }
         })
         .run(tauri::generate_context!())

@@ -104,7 +104,7 @@
   setInterval(handleAdsAndPrompts, 250);
 
   /* ==========================================================================
-     3. BULLETPROOF TOAST NOTIFICATION SYSTEM (INLINE-STYLED & GUARANTEED VISIBLE)
+     3. BULLETPROOF TOAST NOTIFICATION SYSTEM (TOP-CENTER & 100% VISIBLE)
      ========================================================================== */
   function ensureToastContainer() {
     let container = document.getElementById('ytm-toast-container');
@@ -113,22 +113,23 @@
       container.id = 'ytm-toast-container';
     }
 
-    // Always enforce top-priority inline styles
     container.style.cssText = [
       'position: fixed !important',
-      'bottom: 95px !important',
-      'right: 24px !important',
+      'top: 24px !important',
+      'left: 50% !important',
+      'transform: translateX(-50%) !important',
       'z-index: 2147483647 !important',
       'display: flex !important',
       'flex-direction: column !important',
+      'align-items: center !important',
       'gap: 10px !important',
       'pointer-events: none !important',
-      'max-width: 440px !important',
-      'width: auto !important'
+      'max-width: 520px !important',
+      'width: 90% !important'
     ].join(';');
 
     const targetParent = document.body || document.documentElement;
-    if (targetParent && !targetParent.contains(container)) {
+    if (targetParent && container.parentElement !== targetParent) {
       targetParent.appendChild(container);
     }
     return container;
@@ -139,21 +140,21 @@
     const toast = document.createElement('div');
     toast.className = `ytm-toast ytm-toast-${type}`;
 
-    let borderColor = 'rgba(59, 130, 246, 0.8)';
-    let glow = 'rgba(59, 130, 246, 0.35)';
+    let borderColor = 'rgba(59, 130, 246, 0.9)';
+    let glow = 'rgba(59, 130, 246, 0.5)';
     let iconHtml = 'ℹ️';
 
     if (type === 'loading') {
-      borderColor = 'rgba(255, 0, 0, 0.85)';
-      glow = 'rgba(255, 0, 0, 0.4)';
+      borderColor = 'rgba(255, 30, 30, 0.95)';
+      glow = 'rgba(255, 30, 30, 0.6)';
       iconHtml = '⏳';
     } else if (type === 'success') {
-      borderColor = 'rgba(34, 197, 94, 0.85)';
-      glow = 'rgba(34, 197, 94, 0.4)';
+      borderColor = 'rgba(34, 197, 94, 0.95)';
+      glow = 'rgba(34, 197, 94, 0.6)';
       iconHtml = '✅';
     } else if (type === 'error') {
-      borderColor = 'rgba(239, 68, 68, 0.85)';
-      glow = 'rgba(239, 68, 68, 0.4)';
+      borderColor = 'rgba(239, 68, 68, 0.95)';
+      glow = 'rgba(239, 68, 68, 0.6)';
       iconHtml = '❌';
     }
 
@@ -161,25 +162,29 @@
       'pointer-events: auto !important',
       'display: flex !important',
       'align-items: center !important',
-      'gap: 12px !important',
-      'padding: 14px 20px !important',
-      'background: #11131a !important',
-      'border: 1.5px solid ' + borderColor + ' !important',
-      'border-radius: 12px !important',
+      'justify-content: space-between !important',
+      'gap: 14px !important',
+      'padding: 14px 22px !important',
+      'background: rgba(14, 16, 24, 0.97) !important',
+      'backdrop-filter: blur(20px) !important',
+      'border: 2px solid ' + borderColor + ' !important',
+      'border-radius: 14px !important',
       'color: #ffffff !important',
-      'font-size: 13.5px !important',
+      'font-size: 14px !important',
       'font-weight: 600 !important',
       'font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important',
-      'box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9), 0 0 16px ' + glow + ' !important',
+      'box-shadow: 0 14px 36px rgba(0, 0, 0, 0.9), 0 0 20px ' + glow + ' !important',
       'opacity: 1 !important',
       'transition: opacity 0.3s ease, transform 0.3s ease !important',
       'transform: translateY(0) !important',
-      'z-index: 2147483647 !important'
+      'z-index: 2147483647 !important',
+      'width: 100% !important',
+      'box-sizing: border-box !important'
     ].join(';');
 
     const msgEl = document.createElement('div');
-    msgEl.style.cssText = 'flex: 1 1 auto; line-height: 1.4; word-break: break-word; color: #ffffff !important;';
-    msgEl.innerHTML = `<span style="font-size:16px; margin-right:6px;">${iconHtml}</span> ${message}`;
+    msgEl.style.cssText = 'flex: 1 1 auto; line-height: 1.4; word-break: break-word; color: #ffffff !important; display: flex; align-items: center; gap: 8px;';
+    msgEl.innerHTML = `<span style="font-size:20px; flex-shrink: 0;">${iconHtml}</span> <span>${message}</span>`;
     toast.appendChild(msgEl);
 
     // Action button (e.g. Open Downloads Folder)
@@ -187,15 +192,17 @@
       const btn = document.createElement('button');
       btn.style.cssText = [
         'background: rgba(34, 197, 94, 0.25) !important',
-        'border: 1px solid rgba(34, 197, 94, 0.5) !important',
+        'border: 1.5px solid rgba(34, 197, 94, 0.7) !important',
         'color: #ffffff !important',
-        'padding: 6px 14px !important',
-        'border-radius: 6px !important',
-        'font-size: 12px !important',
-        'font-weight: 600 !important',
+        'padding: 8px 16px !important',
+        'border-radius: 8px !important',
+        'font-size: 13px !important',
+        'font-weight: 700 !important',
         'cursor: pointer !important',
         'margin-left: 10px !important',
-        'white-space: nowrap !important'
+        'white-space: nowrap !important',
+        'flex-shrink: 0 !important',
+        'box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3) !important'
       ].join(';');
       btn.textContent = actionText || '📂 Open Folder';
       btn.onclick = (e) => {
@@ -211,10 +218,10 @@
 
     container.appendChild(toast);
 
-    const duration = type === 'loading' ? 14000 : 7000;
+    const duration = type === 'loading' ? 15000 : 8000;
     setTimeout(() => {
       toast.style.opacity = '0';
-      toast.style.transform = 'translateY(12px)';
+      toast.style.transform = 'translateY(-12px)';
       setTimeout(() => {
         if (toast.parentNode) toast.remove();
       }, 350);
@@ -223,9 +230,8 @@
     return toast;
   }
 
-  window.__ytm_show_toast = function(message, type) {
-    showToast(message, type);
-  };
+  window.showToast = showToast;
+  window.__ytm_show_toast = showToast;
 
   /* ==========================================================================
      DIRECT RUST-WEBVIEW ACTION QUEUE (100% UNBLOCKABLE COMMUNICATION)
@@ -522,7 +528,42 @@
     } catch (e) {}
   }
 
-  // 1. DOWNLOAD CURRENT SONG ONLY (Strips all &list= and queue params)
+  // 1. DOWNLOAD SPECIFIC SONG FROM A ROW OR SEARCH RESULT
+  function downloadSongRow(customUrl, title, artist) {
+    let cleanUrl = (customUrl || '').trim();
+    if (cleanUrl.includes('music.youtube.com')) {
+      cleanUrl = cleanUrl.replace('music.youtube.com', 'www.youtube.com');
+    }
+    if (cleanUrl.includes('&list=')) {
+      cleanUrl = cleanUrl.split('&list=')[0];
+    }
+    if (cleanUrl.includes('?list=') && cleanUrl.includes('/watch')) {
+      cleanUrl = cleanUrl.split('?list=')[0];
+    }
+
+    let videoId = extractVideoId(cleanUrl);
+    let finalUrl = '';
+    if (videoId) {
+      finalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    } else if (title) {
+      finalUrl = `ytsearch1:${artist ? title + ' ' + artist : title}`;
+    } else {
+      finalUrl = cleanUrl;
+    }
+
+    const songTitle = title || 'Music Track';
+    showToast(`Downloading "${songTitle}" in MP4 format...`, 'loading');
+
+    sendDownloadRequest({
+      downloadType: 'song',
+      url: finalUrl,
+      title: songTitle,
+      artist: artist || '',
+      lyrics: null
+    });
+  }
+
+  // 2. DOWNLOAD CURRENTLY PLAYING SONG ONLY (Strips all &list= and queue params)
   function downloadCurrentSong(customVideoUrl = null, customTitle = null) {
     const track = getCurrentTrackDetails();
     let currentUrl = customVideoUrl || window.location.href;
@@ -530,37 +571,45 @@
     let title = customTitle || track.title || '';
     let artist = track.artist || '';
 
-    // If nothing is playing and no title or videoId found, prompt the user!
-    if (!videoId && (!title || title === 'Music Track' || title === 'Current Song')) {
-      promptSongDownload();
-      return;
+    // If title and videoId are completely missing, try reading directly from player bar
+    if (!videoId && !title) {
+      const titleEl = queryDeep('ytmusic-player-bar .title, ytmusic-player-bar yt-formatted-string.title, .title.ytmusic-player-bar');
+      if (titleEl && titleEl.textContent && titleEl.textContent.trim()) {
+        title = titleEl.textContent.trim();
+      }
+      const bylineEl = queryDeep('ytmusic-player-bar .byline, ytmusic-player-bar yt-formatted-string.byline, .byline.ytmusic-player-bar');
+      if (bylineEl && bylineEl.textContent && bylineEl.textContent.trim()) {
+        artist = bylineEl.textContent.trim();
+      }
     }
 
     // Strict single song URL construction
     let songUrl = '';
     if (videoId) {
       songUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    } else if (title && title !== 'Music Track') {
+    } else if (title && title !== 'Music Track' && title !== 'Current Song') {
       songUrl = `ytsearch1:${artist ? title + ' ' + artist : title}`;
     } else {
       songUrl = currentUrl.split('&list=')[0].split('?list=')[0];
     }
 
-    // Show INSTANT toast notification
-    showToast(`Downloading "${title}" in MP4 format...`, 'loading');
+    const finalTitle = title || 'Music Track';
+
+    // Show INSTANT top-center toast notification
+    showToast(`Downloading "${finalTitle}" in MP4 format...`, 'loading');
 
     const lyrics = extractCurrentLyrics();
 
     sendDownloadRequest({
       downloadType: 'song',
       url: songUrl,
-      title: title,
+      title: finalTitle,
       artist: artist,
       lyrics: lyrics
     });
   }
 
-  // 2. DOWNLOAD ENTIRE PLAYLIST
+  // 3. DOWNLOAD ENTIRE PLAYLIST OR ALBUM
   function downloadCurrentPlaylist() {
     const track = getCurrentTrackDetails();
     let listId = track.playlistId || extractPlaylistId(window.location.href);
@@ -572,8 +621,13 @@
       }
     }
 
-    if (!listId) {
-      showToast('⚠️ No playlist detected. Open an album or playlist first!', 'error');
+    let playlistUrl = '';
+    if (listId) {
+      playlistUrl = `https://www.youtube.com/playlist?list=${listId}`;
+    } else if (window.location.href.includes('/browse/MPREb_') || window.location.href.includes('/playlist')) {
+      playlistUrl = window.location.href.replace('music.youtube.com', 'www.youtube.com');
+    } else {
+      showToast('⚠️ Please open a playlist or album to download it!', 'error');
       return;
     }
 
@@ -584,16 +638,14 @@
       'ytmusic-editable-playlist-detail-header-renderer .title, ' +
       'ytmusic-header-renderer .title'
     );
-    if (headerTitle) {
+    if (headerTitle && headerTitle.textContent.trim()) {
       playlistTitle = headerTitle.textContent.trim();
     } else if (track.title) {
       playlistTitle = `${track.title} Mix`;
     }
 
-    // Show INSTANT toast notification
+    // Show INSTANT top-center toast notification
     showToast(`Downloading Playlist "${playlistTitle}" in MP4 format...`, 'loading');
-
-    const playlistUrl = `https://www.youtube.com/playlist?list=${listId}`;
 
     sendDownloadRequest({
       downloadType: 'playlist',
@@ -604,6 +656,7 @@
     });
   }
 
+  window.__ytm_download_song_row = downloadSongRow;
   window.__ytm_download_current_song = downloadCurrentSong;
   window.__ytm_download_current_playlist = downloadCurrentPlaylist;
 
@@ -619,8 +672,8 @@
     bar.id = 'ytm-floating-bar';
     bar.style.cssText = [
       'position: fixed !important',
-      'top: 14px !important',
-      'right: 120px !important',
+      'top: 12px !important',
+      'right: 90px !important',
       'z-index: 2147483640 !important',
       'display: flex !important',
       'align-items: center !important',
@@ -636,12 +689,12 @@
       'display: inline-flex !important',
       'align-items: center !important',
       'gap: 6px !important',
-      'padding: 7px 15px !important',
+      'padding: 7px 16px !important',
       'background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important',
       'border: none !important',
       'border-radius: 20px !important',
       'color: #ffffff !important',
-      'font-size: 12.5px !important',
+      'font-size: 13px !important',
       'font-weight: 700 !important',
       'font-family: system-ui, sans-serif !important',
       'cursor: pointer !important',
@@ -666,8 +719,8 @@
       'align-items: center !important',
       'gap: 6px !important',
       'padding: 7px 14px !important',
-      'background: rgba(255, 255, 255, 0.1) !important',
-      'border: 1px solid rgba(255, 255, 255, 0.2) !important',
+      'background: rgba(255, 255, 255, 0.12) !important',
+      'border: 1px solid rgba(255, 255, 255, 0.25) !important',
       'backdrop-filter: blur(16px) !important',
       'border-radius: 20px !important',
       'color: #ffffff !important',
@@ -682,8 +735,8 @@
       e.stopPropagation();
       downloadCurrentPlaylist();
     };
-    plBtn.onmouseenter = () => { plBtn.style.transform = 'scale(1.05)'; plBtn.style.background = 'rgba(255,255,255,0.18)'; };
-    plBtn.onmouseleave = () => { plBtn.style.transform = 'scale(1)'; plBtn.style.background = 'rgba(255,255,255,0.1)'; };
+    plBtn.onmouseenter = () => { plBtn.style.transform = 'scale(1.05)'; plBtn.style.background = 'rgba(255,255,255,0.2)'; };
+    plBtn.onmouseleave = () => { plBtn.style.transform = 'scale(1)'; plBtn.style.background = 'rgba(255,255,255,0.12)'; };
     bar.appendChild(plBtn);
 
     // 3. Open Downloads Folder Button
@@ -747,55 +800,158 @@
   }
 
   /* ==========================================================================
-     6. UI BUTTONS INJECTION (PLAYER BAR & PLAYLIST HEADER)
+     6. UI BUTTONS INJECTION (PLAYER BAR, TRACK ROWS, & PLAYLIST HEADER)
      ========================================================================== */
-  function installPlayerDownloadButton() {
-    if (queryDeep('#ytm-player-dl-btn')) return;
-
+  function installPlayerDownloadButtons() {
     const playerBar = document.querySelector('ytmusic-player-bar');
     if (!playerBar) return;
     const root = playerBar.shadowRoot || playerBar;
 
+    // 1. LEFT CONTROLS: Directly next to song title/artist and like button!
+    const leftControls = root.querySelector('.left-controls') || root.querySelector('#left-controls');
+    if (leftControls && !leftControls.querySelector('#ytm-player-dl-left-btn')) {
+      const leftBtn = document.createElement('button');
+      leftBtn.id = 'ytm-player-dl-left-btn';
+      leftBtn.title = 'Download this playing song in MP4 format with lyrics';
+      leftBtn.style.cssText = [
+        'display: inline-flex !important',
+        'align-items: center !important',
+        'gap: 6px !important',
+        'padding: 7px 16px !important',
+        'margin-left: 14px !important',
+        'background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important',
+        'border: none !important',
+        'border-radius: 20px !important',
+        'color: #ffffff !important',
+        'font-size: 12.5px !important',
+        'font-weight: 700 !important',
+        'cursor: pointer !important',
+        'user-select: none !important',
+        'box-shadow: 0 4px 12px rgba(255, 0, 0, 0.5) !important',
+        'z-index: 9999 !important',
+        'flex-shrink: 0 !important',
+        'transition: transform 0.15s ease !important'
+      ].join(';');
+      leftBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" style="width:15px; height:15px; fill:#fff;">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+        </svg>
+        <span>⬇️ Download Song</span>
+      `;
+      leftBtn.onclick = (e) => {
+        e.stopPropagation();
+        downloadCurrentSong();
+      };
+      leftBtn.onmouseenter = () => { leftBtn.style.transform = 'scale(1.05)'; };
+      leftBtn.onmouseleave = () => { leftBtn.style.transform = 'scale(1)'; };
+      leftControls.appendChild(leftBtn);
+    }
+
+    // 2. MIDDLE CONTROLS: Beside playback controls
     const middleControls = root.querySelector('.middle-controls') || root.querySelector('#middle-controls');
-    if (!middleControls) return;
-
-    const btn = document.createElement('div');
-    btn.id = 'ytm-player-dl-btn';
-    btn.title = 'Download ONLY this song (MP4 with lyrics)';
-    btn.style.cssText = [
-      'display: inline-flex !important',
-      'align-items: center !important',
-      'gap: 6px !important',
-      'padding: 6px 14px !important',
-      'margin-left: 14px !important',
-      'background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important',
-      'border: none !important',
-      'border-radius: 20px !important',
-      'color: #ffffff !important',
-      'font-size: 12px !important',
-      'font-weight: 600 !important',
-      'cursor: pointer !important',
-      'user-select: none !important',
-      'box-shadow: 0 2px 8px rgba(255, 0, 0, 0.4) !important',
-      'z-index: 999 !important'
-    ].join(';');
-    btn.innerHTML = `
-      <svg viewBox="0 0 24 24" style="width:14px; height:14px; fill:#fff;">
-        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
-      </svg>
-      <span>Download Song</span>
-    `;
-
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      downloadCurrentSong();
-    };
-
-    middleControls.appendChild(btn);
+    if (middleControls && !middleControls.querySelector('#ytm-player-dl-btn')) {
+      const btn = document.createElement('div');
+      btn.id = 'ytm-player-dl-btn';
+      btn.title = 'Download ONLY this song (MP4 with lyrics)';
+      btn.style.cssText = [
+        'display: inline-flex !important',
+        'align-items: center !important',
+        'gap: 6px !important',
+        'padding: 6px 14px !important',
+        'margin-left: 12px !important',
+        'background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important',
+        'border: none !important',
+        'border-radius: 20px !important',
+        'color: #ffffff !important',
+        'font-size: 12px !important',
+        'font-weight: 600 !important',
+        'cursor: pointer !important',
+        'user-select: none !important',
+        'box-shadow: 0 2px 8px rgba(255, 0, 0, 0.4) !important',
+        'z-index: 999 !important',
+        'flex-shrink: 0 !important'
+      ].join(';');
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" style="width:14px; height:14px; fill:#fff;">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+        </svg>
+        <span>Download Song</span>
+      `;
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        downloadCurrentSong();
+      };
+      middleControls.appendChild(btn);
+    }
   }
 
+  // 3. TRACK ROW DOWNLOAD BUTTONS: Injects direct download button on EVERY song row in search / playlists / albums
+  function installRowDownloadButtons() {
+    const rows = document.querySelectorAll('ytmusic-responsive-list-item-renderer');
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.querySelector('.ytm-row-dl-btn')) continue;
+
+      const btn = document.createElement('button');
+      btn.className = 'ytm-row-dl-btn';
+      btn.title = 'Download this song in MP4 format with lyrics';
+      btn.style.cssText = [
+        'display: inline-flex !important',
+        'align-items: center !important',
+        'gap: 4px !important',
+        'padding: 5px 12px !important',
+        'background: rgba(255, 0, 0, 0.22) !important',
+        'border: 1.5px solid rgba(255, 0, 0, 0.6) !important',
+        'border-radius: 14px !important',
+        'color: #ffffff !important',
+        'font-size: 11.5px !important',
+        'font-weight: 700 !important',
+        'font-family: system-ui, sans-serif !important',
+        'cursor: pointer !important',
+        'margin-right: 8px !important',
+        'margin-left: 4px !important',
+        'z-index: 10 !important',
+        'flex-shrink: 0 !important',
+        'transition: all 0.15s ease !important'
+      ].join(';');
+      btn.innerHTML = '<span>⬇️ Download</span>';
+
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        const titleEl = queryDeep('.title, yt-formatted-string.title, a.yt-simple-endpoint.yt-formatted-string', row);
+        const title = titleEl ? titleEl.textContent.trim() : '';
+
+        const artistEl = queryDeep('.byline, yt-formatted-string.byline, .secondary-flex-columns', row);
+        const artist = artistEl ? artistEl.textContent.trim() : '';
+
+        const link = queryDeep('a[href*="watch"], a[href*="v="]', row);
+        const url = link ? link.href : '';
+
+        downloadSongRow(url, title, artist);
+      };
+
+      btn.onmouseenter = () => {
+        btn.style.background = '#ff0000 !important';
+        btn.style.transform = 'scale(1.05)';
+      };
+      btn.onmouseleave = () => {
+        btn.style.background = 'rgba(255, 0, 0, 0.22) !important';
+        btn.style.transform = 'scale(1)';
+      };
+
+      const menu = row.querySelector('.menu, ytmusic-menu-renderer, #menu');
+      if (menu && menu.parentElement) {
+        menu.parentElement.insertBefore(btn, menu);
+      } else {
+        row.appendChild(btn);
+      }
+    }
+  }
+
+  // 4. PLAYLIST & ALBUM HEADER DOWNLOAD BUTTON
   function installPlaylistHeaderButton() {
-    if (!window.location.href.includes('list=')) return;
     if (queryDeep('#ytm-playlist-header-btn')) return;
 
     const container = queryDeep(
@@ -809,21 +965,22 @@
     const btn = document.createElement('button');
     btn.id = 'ytm-playlist-header-btn';
     btn.className = 'ytm-playlist-header-btn';
-    btn.title = 'Download entire playlist in MP4 format with lyrics';
+    btn.title = 'Download entire playlist or album in MP4 format with lyrics';
     btn.style.cssText = [
       'display: inline-flex !important',
       'align-items: center !important',
       'gap: 8px !important',
-      'padding: 10px 20px !important',
-      'margin-right: 12px !important',
+      'padding: 10px 22px !important',
+      'margin-right: 14px !important',
       'background: linear-gradient(135deg, #cc0000 0%, #ff0000 100%) !important',
       'border: none !important',
       'border-radius: 24px !important',
       'color: #ffffff !important',
-      'font-size: 13px !important',
-      'font-weight: 600 !important',
+      'font-size: 13.5px !important',
+      'font-weight: 700 !important',
       'cursor: pointer !important',
-      'box-shadow: 0 4px 14px rgba(255, 0, 0, 0.45) !important'
+      'box-shadow: 0 4px 16px rgba(255, 0, 0, 0.5) !important',
+      'transition: transform 0.15s ease !important'
     ].join(';');
     btn.innerHTML = `
       <svg viewBox="0 0 24 24" style="width:16px; height:16px; fill:#fff;">
@@ -837,6 +994,8 @@
       e.preventDefault();
       downloadCurrentPlaylist();
     };
+    btn.onmouseenter = () => { btn.style.transform = 'scale(1.04)'; };
+    btn.onmouseleave = () => { btn.style.transform = 'scale(1)'; };
 
     container.insertBefore(btn, container.firstChild);
   }
@@ -1188,7 +1347,8 @@
   function injectAllComponents() {
     try {
       installFloatingActionBar();
-      installPlayerDownloadButton();
+      installPlayerDownloadButtons();
+      installRowDownloadButtons();
       installPlaylistHeaderButton();
     } catch (e) {
       console.warn('[YTM-Native] Injection notice:', e);
