@@ -7,13 +7,13 @@ if "%1"=="--restart" goto restart
 if "%1"=="--rebuild" goto build
 if "%1"=="-r" goto build
 
-if exist "src-tauri\target\release\youtube-music.exe" (
-    start "" "src-tauri\target\release\youtube-music.exe"
+if exist "%~dp0src-tauri\target\release\youtube-music.exe" (
+    start "" "%~dp0src-tauri\target\release\youtube-music.exe"
     exit /b 0
 )
 
-if exist "src-tauri\target\debug\youtube-music.exe" (
-    start "" "src-tauri\target\debug\youtube-music.exe"
+if exist "%~dp0src-tauri\target\debug\youtube-music.exe" (
+    start "" "%~dp0src-tauri\target\debug\youtube-music.exe"
     exit /b 0
 )
 
